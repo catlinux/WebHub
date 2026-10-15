@@ -156,7 +156,10 @@ Añade el bloque de [Caddyfile.ejemplo](Caddyfile.ejemplo) con tu dominio, `sudo
 - Docker habilitado al arranque y contenedor con `restart: unless-stopped`.
 
 **Probado antes, en un contenedor de desarrollo:** interfaz en Chromium (Playwright) en escritorio y móvil
-emulado, importador con archivos de ejemplo, comprobador contra un servidor local.
+emulado, importador con archivos de ejemplo, comprobador contra un servidor local. La 0.2.0 se
+comprobó en este VPS con Chromium real, en una instancia aparte con datos temporales: plegar bloques y recordarlo al recargar, tooltip, arrastrar
+bloques (sin mezclar niveles), cambio de fondo y recuerdo del aspecto; no se ha probado en móvil físico ni
+en Firefox/Safari.
 
 **No probado:**
 

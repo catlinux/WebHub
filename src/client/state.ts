@@ -6,7 +6,7 @@ export type View =
   | { kind: 'all' }
   | { kind: 'fav' }
   | { kind: 'family'; id: number }
-  | { kind: 'admin'; tab: 'organizar' | 'importar' | 'copia' | 'comprobar' };
+  | { kind: 'admin'; tab: 'organizar' | 'importar' | 'copia' | 'comprobar' | 'aspecto' };
 
 /** Estado en memoria. Los datos son pocos (cientos de enlaces): se cargan una vez y se indexan. */
 export const state = {
@@ -61,7 +61,7 @@ export function parseHash(hash: string): View {
     }
     case 'admin': {
       const tab = parts[1];
-      return { kind: 'admin', tab: tab === 'importar' || tab === 'copia' || tab === 'comprobar' ? tab : 'organizar' };
+      return { kind: 'admin', tab: tab === 'importar' || tab === 'copia' || tab === 'comprobar' || tab === 'aspecto' ? tab : 'organizar' };
     }
     default:
       return { kind: 'all' };

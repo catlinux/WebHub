@@ -26,6 +26,16 @@ Uso personal, un solo usuario. Toda la aplicación (también la lista de enlaces
   - exportar y restaurar todo en JSON;
   - comprobador de enlaces rotos bajo demanda.
 
+- **Reordenar bloques** arrastrando desde su título, solo entre familias del mismo
+  nivel; en pantallas táctiles se usa ↑↓ en Administrar › Organizar.
+- **Bloques plegables** con flecha ▾; el contador sigue visible y el estado se
+  recuerda por dispositivo.
+- **Tooltip propio** con título, URL, nota, etiquetas y número de aperturas, en
+  lugar del tooltip nativo del navegador; no aparece en pantallas táctiles.
+- **Pestaña «Aspecto»** en Administrar para elegir el fondo del área central
+  (Liso, Cuadrícula, Puntos, Resplandor, Aurora), color e intensidad, con vista
+  previa y Restablecer; se guarda por dispositivo.
+
 WebHub **no guarda contraseñas ni secretos** de ningún tipo (ver [TODO.md](TODO.md)).
 
 ## Requisitos
@@ -87,7 +97,7 @@ test/e2e/ejecutar.sh   # prueba en Chromium real con capturas (requiere Playwrig
 Estructura:
 
 ```
-src/shared/   lógica común probada con tests (URLs, búsqueda, orden, marcadores)
+src/shared/   lógica común probada con tests (URLs, búsqueda, orden, marcadores, aspecto)
 src/server/   servidor HTTP (node:http), SQLite (node:sqlite), autenticación, API
 src/client/   interfaz sin framework, empaquetada con esbuild en public/app.js
 public/       HTML, CSS, logo y favicons

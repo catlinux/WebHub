@@ -7,7 +7,10 @@ import {
 import { searchLinks } from '../shared/search.ts';
 import { linkDialog, familyDialog } from './dialogs.ts';
 import { renderAdmin } from './admin.ts';
-import type { Link, Snapshot } from '../shared/types.ts';
+import { aplicarAspecto } from './aspecto.ts';
+import { attachTooltips, hideTooltip } from './tooltip.ts';
+import { dropReorder } from '../shared/order.ts';
+import type { Family, Link, Snapshot } from '../shared/types.ts';
 
 const root = document.getElementById('app') as HTMLElement;
 
@@ -163,6 +166,11 @@ function buildLayout(): void {
       }
     }
   });
+  aplicarAspecto(content);
+  attachTooltips(content, (a) => {
+    const link = linkById(Number(a.dataset.id));
+    return link ? tooltipOf(link) : null;
+  });
   content.addEventListener('click', onLinkActivate);
   content.addEventListener('auxclick', (ev) => {
     if ((ev as MouseEvent).button === 1) onLinkActivate(ev);
@@ -240,12 +248,10 @@ function renderSidebar(): void {
 // ---------------------------------------------------------------- listas
 
 function linkRow(link: Link, showFamily = false): HTMLElement {
-  const tooltip = [link.title, link.url, link.note, link.tags.length ? `#${link.tags.join(' #')}` : ''].filter(Boolean).join('\n');
   const anchor = h(
     'a',
     {
       class: 'link',
-      title: tooltip,
       attrs: { href: link.url, target: '_blank', rel: 'noopener noreferrer' },
       data: { id: link.id },
     },
@@ -265,21 +271,131 @@ function linkRow(link: Link, showFamily = false): HTMLElement {
   return h('li', { class: 'fila' }, anchor, star);
 }
 
-function block(title: string | null, links: Link[], opts: { href?: string; count?: number; showFamily?: boolean } = {}): HTMLElement | null {
-  if (links.length === 0) return null;
+function tooltipOf(link: Link): HTMLElement {
   return h(
-    'section',
-    { class: 'bloque' },
-    title
-      ? h(
-          'h3',
-          null,
-          opts.href ? h('a', { text: title, attrs: { href: opts.href } }) : title,
-          h('span', { class: 'num', text: String(opts.count ?? links.length) }),
-        )
-      : null,
-    h('ul', { class: 'lista' }, ...links.map((l) => linkRow(l, opts.showFamily))),
+    'div',
+    null,
+    h('div', { class: 'tt-titulo', text: link.title }),
+    h('div', { class: 'tt-url', text: link.url }),
+    link.note ? h('div', { class: 'tt-nota', text: link.note }) : null,
+    link.tags.length ? h('div', { class: 'tt-etiquetas' }, ...link.tags.map((t) => h('span', { class: 'chip', text: `#${t}` }))) : null,
+    link.clicks > 0 ? h('div', { class: 'tt-uso', text: `Abierto ${link.clicks} ${link.clicks === 1 ? 'vez' : 'veces'}` }) : null,
   );
+}
+
+// Bloques plegados: preferencia de este navegador.
+const CLAVE_PLEGADOS = 'webhub.plegados';
+const plegados = (() => {
+  try {
+    const raw: unknown = JSON.parse(localStorage.getItem(CLAVE_PLEGADOS) ?? '[]');
+    return new Set(Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : []);
+  } catch {
+    return new Set<string>();
+  }
+})();
+
+function alternarPlegado(key: string): void {
+  if (!plegados.delete(key)) plegados.add(key);
+  try {
+    localStorage.setItem(CLAVE_PLEGADOS, JSON.stringify([...plegados]));
+  } catch {
+    /* sin almacenamiento local */
+  }
+  renderContent();
+  layout?.content.querySelector<HTMLElement>(`[data-plegar="${key}"]`)?.focus();
+}
+
+let arrastrada: Family | null = null;
+
+function marcarDestino(section: HTMLElement | null, after = false): void {
+  document.querySelectorAll('.bloque.antes, .bloque.despues').forEach((el) => el.classList.remove('antes', 'despues'));
+  section?.classList.add(after ? 'despues' : 'antes');
+}
+
+/** Hace arrastrable el bloque de una familia desde su título, entre familias del mismo nivel. */
+function makeDraggable(section: HTMLElement, head: HTMLElement, family: Family): void {
+  head.draggable = true;
+  head.addEventListener('dragstart', (ev) => {
+    arrastrada = family;
+    hideTooltip();
+    section.classList.add('arrastrando');
+    if (ev.dataTransfer) {
+      ev.dataTransfer.effectAllowed = 'move';
+      ev.dataTransfer.setData('text/plain', family.name);
+      ev.dataTransfer.setDragImage(section, 12, 12);
+    }
+  });
+  head.addEventListener('dragend', () => {
+    arrastrada = null;
+    section.classList.remove('arrastrando');
+    marcarDestino(null);
+  });
+  const sameLevel = () => arrastrada !== null && arrastrada.parentId === family.parentId && arrastrada.id !== family.id;
+  const isAfter = (ev: DragEvent) => {
+    const r = section.getBoundingClientRect();
+    return ev.clientY > r.top + r.height / 2;
+  };
+  section.addEventListener('dragover', (ev) => {
+    if (!sameLevel()) return;
+    ev.preventDefault();
+    if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'move';
+    marcarDestino(section, isAfter(ev));
+  });
+  section.addEventListener('dragleave', (ev) => {
+    if (!section.contains(ev.relatedTarget as Node | null)) section.classList.remove('antes', 'despues');
+  });
+  section.addEventListener('drop', async (ev) => {
+    if (!sameLevel() || !arrastrada) return;
+    ev.preventDefault();
+    const dragged = arrastrada;
+    const siblings = (family.parentId === null ? topFamilies() : childrenOf(family.parentId)).map((f) => f.id);
+    marcarDestino(null);
+    try {
+      await api('PUT', '/api/families/order', { parentId: family.parentId, ids: dropReorder(siblings, dragged.id, family.id, isAfter(ev)) });
+      await reload();
+    } catch (err) {
+      toast((err as Error).message, true);
+    }
+  });
+}
+
+interface BlockOptions {
+  href?: string;
+  count?: number;
+  showFamily?: boolean;
+  /** Identifica el bloque para recordar si está plegado; sin clave, no se puede plegar. */
+  key?: string;
+  /** Familia que representa el bloque; si se indica, se puede arrastrar para reordenarla. */
+  family?: Family;
+}
+
+function block(title: string | null, links: Link[], opts: BlockOptions = {}): HTMLElement | null {
+  if (links.length === 0) return null;
+  const collapsed = !!title && !!opts.key && plegados.has(opts.key);
+  const section = h('section', { class: `bloque${collapsed ? ' plegado' : ''}` });
+  if (title) {
+    const head = h('h3');
+    if (opts.key) {
+      const key = opts.key;
+      head.append(
+        h('button', {
+          class: 'plegar',
+          text: '▾',
+          data: { plegar: key },
+          attrs: { type: 'button', 'aria-expanded': String(!collapsed), 'aria-label': `${collapsed ? 'Desplegar' : 'Plegar'} ${title}` },
+          on: { click: () => alternarPlegado(key) },
+        }),
+      );
+    }
+    head.append(
+      opts.href ? h('a', { text: title, attrs: { href: opts.href, draggable: 'false' } }) : title,
+      h('span', { class: 'num', text: String(opts.count ?? links.length) }),
+    );
+    section.append(head);
+    if (opts.family) makeDraggable(section, head, opts.family);
+  }
+  if (!collapsed) section.append(h('ul', { class: 'lista' }, ...links.map((l) => linkRow(l, opts.showFamily))));
+  return section;
 }
 
 function emptyState(message: string, withActions = false): HTMLElement {
@@ -313,6 +429,7 @@ function addLinkButton(familyId: number | null): HTMLElement {
 
 function renderContent(): void {
   if (!layout) return;
+  hideTooltip();
   const { content } = layout;
   const v = state.view;
   const query = state.query.trim();
@@ -341,7 +458,7 @@ function renderContent(): void {
   if (v.kind === 'fav') {
     const { starred, top } = favorites();
     setHeader('Favoritos y más usados', new Set([...starred, ...top]).size, [addLinkButton(null)]);
-    const blocks = [block('Favoritos', starred, { showFamily: true }), block('Más usados', top, { showFamily: true })].filter(Boolean);
+    const blocks = [block('Favoritos', starred, { showFamily: true, key: 'fav' }), block('Más usados', top, { showFamily: true, key: 'top' })].filter(Boolean);
     clear(content, blocks.length ? h('div', { class: 'columnas' }, ...blocks) : emptyState('Marca enlaces con ☆ o úsalos: aquí aparecerán los favoritos y los más abiertos.'));
     return;
   }
@@ -355,8 +472,8 @@ function renderContent(): void {
       addLinkButton(f.id),
     ]);
     const blocks = [
-      block(kids.length ? f.name : null, linksOf(f.id)),
-      ...kids.map((c) => block(c.name, linksOf(c.id), { href: `#/f/${c.id}` })),
+      block(kids.length ? f.name : null, linksOf(f.id), { key: `f${f.id}` }),
+      ...kids.map((c) => block(c.name, linksOf(c.id), { href: `#/f/${c.id}`, key: `f${c.id}`, family: c })),
     ].filter(Boolean);
     clear(content, blocks.length ? h('div', { class: 'columnas' }, ...blocks) : emptyState('Esta familia está vacía.'));
     return;
@@ -366,8 +483,8 @@ function renderContent(): void {
   setHeader('Todos', state.links.length, [addLinkButton(null)]);
   const blocks: (HTMLElement | null)[] = [];
   for (const f of topFamilies()) {
-    blocks.push(block(f.name, linksOf(f.id), { href: `#/f/${f.id}` }));
-    for (const c of childrenOf(f.id)) blocks.push(block(`${f.name} › ${c.name}`, linksOf(c.id), { href: `#/f/${c.id}` }));
+    blocks.push(block(f.name, linksOf(f.id), { href: `#/f/${f.id}`, key: `f${f.id}`, family: f }));
+    for (const c of childrenOf(f.id)) blocks.push(block(`${f.name} › ${c.name}`, linksOf(c.id), { href: `#/f/${c.id}`, key: `f${c.id}`, family: c }));
   }
   const visible = blocks.filter(Boolean);
   clear(content, visible.length ? h('div', { class: 'columnas' }, ...visible) : emptyState('Las familias están vacías. Añade enlaces con «+ Enlace».'));

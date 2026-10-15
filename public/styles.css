@@ -137,6 +137,20 @@ label.etiqueta { display: block; margin: .6rem 0 .2rem; color: var(--muted); fon
   border-bottom: 1px solid var(--line);
 }
 .bloque h3 a { text-decoration: none; }
+.bloque h3[draggable="true"] { cursor: grab; }
+.bloque.arrastrando { opacity: .4; }
+.bloque.antes { box-shadow: 0 -2px 0 var(--accent); }
+.bloque.despues { box-shadow: 0 2px 0 var(--accent); }
+.plegar {
+  display: inline-grid; place-items: center; width: 18px; height: 18px; flex: none; align-self: center;
+  margin-right: -.1rem; padding: 0; background: none; border: 0; border-radius: 4px;
+  color: var(--accent-dim); cursor: pointer; font-size: 12px; transition: transform .12s, color .12s;
+}
+.plegar:hover { color: var(--accent); background: var(--accent-bg); }
+.plegar:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.bloque.plegado .plegar { transform: rotate(-90deg); }
+.bloque.plegado h3 { border-bottom-color: transparent; }
+@media (pointer: coarse) { .plegar { width: 28px; height: 28px; font-size: 15px; } }
 .bloque h3 a:hover { text-decoration: underline; }
 .bloque h3 .num { color: var(--faint); font-weight: 400; }
 .lista { list-style: none; margin: 0; padding: 0; }
@@ -167,6 +181,53 @@ img.fav { background: #e6edf1; padding: 1px; object-fit: contain; }
 .estrella.on { color: var(--accent); }
 .vacio { color: var(--muted); padding: 1.2rem .35rem; }
 .vacio .btn { margin-top: .6rem; }
+
+/* ---------- Tooltip de enlaces ---------- */
+.tooltip {
+  position: fixed; z-index: 60; max-width: min(380px, calc(100vw - 16px)); padding: .5rem .65rem;
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--accent-dim); border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .55), 0 0 0 1px rgba(63, 224, 197, .06);
+  pointer-events: none; font-size: 12.5px; line-height: 1.4;
+}
+.tt-titulo { font-weight: 600; font-size: 13.5px; overflow-wrap: anywhere; }
+.tt-url { margin-top: .15rem; color: var(--accent); font: 11.5px var(--mono); overflow-wrap: anywhere; }
+.tt-nota { margin-top: .35rem; color: var(--muted); font-style: italic; overflow-wrap: anywhere; }
+.tt-etiquetas { display: flex; flex-wrap: wrap; gap: .25rem; margin-top: .4rem; }
+.tt-uso { margin-top: .4rem; color: var(--faint); font-size: 11.5px; }
+
+/* ---------- Fondo del área central (configurable en Administrar › Aspecto) ---------- */
+[data-fondo="cuadricula"] {
+  background-image:
+    linear-gradient(rgba(var(--tinte), calc(var(--int) * .10)) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(var(--tinte), calc(var(--int) * .10)) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+[data-fondo="puntos"] {
+  background-image: radial-gradient(rgba(var(--tinte), calc(var(--int) * .32)) 1px, transparent 1.6px);
+  background-size: 22px 22px;
+}
+[data-fondo="resplandor"] {
+  background-image: radial-gradient(ellipse 75% 55% at 50% 0%, rgba(var(--tinte), calc(var(--int) * .20)), transparent 72%);
+}
+[data-fondo="aurora"] {
+  background-image:
+    radial-gradient(ellipse 55% 45% at 8% 0%, rgba(var(--tinte), calc(var(--int) * .22)), transparent 70%),
+    radial-gradient(ellipse 50% 45% at 100% 100%, rgba(var(--tinte), calc(var(--int) * .16)), transparent 70%);
+}
+.opciones-fondo { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: .6rem; margin: .6rem 0 1rem; }
+.opcion-fondo {
+  display: flex; flex-direction: column; gap: .35rem; padding: .35rem; cursor: pointer;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px; color: var(--muted);
+}
+.opcion-fondo:hover { border-color: var(--accent-dim); }
+.opcion-fondo.activa { border-color: var(--accent); color: var(--accent); }
+.opcion-fondo:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.muestra-fondo { height: 56px; border-radius: 5px; border: 1px solid var(--line); background-color: var(--bg); }
+.ajustes-fondo { display: grid; grid-template-columns: max-content minmax(0, 320px); align-items: center; gap: .5rem .9rem; margin-bottom: 1rem; }
+.ajustes-fondo .etiqueta { margin: 0; }
+.ajustes-fondo input[type="color"] { width: 48px; height: 28px; padding: 0; background: none; border: 1px solid var(--line); border-radius: 5px; }
+.fila-rango { display: flex; align-items: center; gap: .6rem; }
+.fila-rango input { flex: 1; accent-color: var(--accent); }
 
 /* ---------- Diálogos ---------- */
 dialog {

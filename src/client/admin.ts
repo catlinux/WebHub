@@ -4,17 +4,20 @@ import { state, topFamilies, childrenOf, familyById, linksOf, countFamily, famil
 import { linkDialog, familyDialog, confirmDialog } from './dialogs.ts';
 import { dropReorder, moveItem } from '../shared/order.ts';
 import { classify } from '../shared/check.ts';
+import { FONDOS, ASPECTO_INICIAL, type Aspecto } from '../shared/aspecto.ts';
+import { cargarAspecto, guardarAspecto, aplicarAspecto } from './aspecto.ts';
 import type { ImportPlan, PlanGroup } from '../shared/bookmarks.ts';
 import type { Family, Link } from '../shared/types.ts';
 
 type Reload = () => Promise<void>;
-type Tab = 'organizar' | 'importar' | 'copia' | 'comprobar';
+type Tab = 'organizar' | 'importar' | 'copia' | 'comprobar' | 'aspecto';
 
 const TABS: [Tab, string][] = [
   ['organizar', 'Organizar'],
   ['importar', 'Importar marcadores'],
   ['copia', 'Copia de seguridad'],
   ['comprobar', 'Enlaces rotos'],
+  ['aspecto', 'Aspecto'],
 ];
 
 export function renderAdmin(content: HTMLElement, tab: Tab, reload: Reload): void {
@@ -31,6 +34,7 @@ export function renderAdmin(content: HTMLElement, tab: Tab, reload: Reload): voi
   if (tab === 'organizar') renderOrganize(body, reload);
   else if (tab === 'importar') renderImport(body, reload);
   else if (tab === 'copia') renderBackup(body, reload);
+  else if (tab === 'aspecto') renderAspecto(body, content);
   else renderChecker(body, reload);
 }
 
@@ -580,3 +584,56 @@ function renderChecker(container: HTMLElement, reload: Reload): void {
   })();
 }
 
+
+// ================================================================ Aspecto
+
+function renderAspecto(container: HTMLElement, area: HTMLElement): void {
+  let actual = cargarAspecto();
+  const muestras = FONDOS.map(([id, nombre]) => {
+    const muestra = h('div', { class: 'muestra-fondo', attrs: { 'aria-hidden': 'true' } });
+    const boton = h('button', { class: 'opcion-fondo', attrs: { type: 'button' } }, muestra, h('span', { text: nombre }));
+    boton.addEventListener('click', () => cambiar({ fondo: id }));
+    return { id, muestra, boton };
+  });
+  const color = h('input', { attrs: { type: 'color', 'aria-label': 'Color del fondo' } });
+  const fuerza = h('input', { attrs: { type: 'range', min: 0, max: 100, step: 1, 'aria-label': 'Intensidad del fondo' } });
+  const valor = h('span', { class: 'secundario' });
+
+  function pintar(): void {
+    aplicarAspecto(area, actual);
+    for (const m of muestras) {
+      aplicarAspecto(m.muestra, { ...actual, fondo: m.id });
+      m.boton.classList.toggle('activa', m.id === actual.fondo);
+      m.boton.setAttribute('aria-pressed', String(m.id === actual.fondo));
+    }
+    color.value = actual.color;
+    fuerza.value = String(actual.intensidad);
+    valor.textContent = `${actual.intensidad} %`;
+  }
+  function cambiar(parcial: Partial<Aspecto>): void {
+    actual = { ...actual, ...parcial };
+    guardarAspecto(actual);
+    pintar();
+  }
+  color.addEventListener('input', () => cambiar({ color: color.value }));
+  fuerza.addEventListener('input', () => cambiar({ intensidad: Number(fuerza.value) }));
+
+  clear(
+    container,
+    h(
+      'div',
+      { class: 'seccion' },
+      h('h3', { text: 'Fondo del área central' }),
+      h('p', { class: 'ayuda', text: 'Un fondo discreto detrás de las listas. Se ve al momento y se guarda en este navegador: en cada dispositivo se configura por separado.' }),
+      h('div', { class: 'opciones-fondo' }, ...muestras.map((m) => m.boton)),
+      h('div', { class: 'ajustes-fondo' },
+        h('label', { class: 'etiqueta' }, 'Color'),
+        color,
+        h('label', { class: 'etiqueta' }, 'Intensidad'),
+        h('div', { class: 'fila-rango' }, fuerza, valor),
+      ),
+      h('button', { class: 'btn', text: 'Restablecer', attrs: { type: 'button' }, on: { click: () => cambiar(ASPECTO_INICIAL) } }),
+    ),
+  );
+  pintar();
+}
