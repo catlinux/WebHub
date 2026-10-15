@@ -480,49 +480,102 @@ function renderChecker(container: HTMLElement, reload: Reload): void {
   const startBtn = h('button', { class: 'btn primario', text: `Comprobar los ${state.links.length} enlaces`, attrs: { type: 'button', disabled: state.links.length === 0 } });
 
   const drawResults = () => {
-    const groups = { roto: [] as Link[], aviso: [] as Link[], ok: 0, pendiente: 0 };
+    const groups = { roto: [] as Link[], aviso: [] as Link[], privado: [] as Link[], protegido: [] as Link[], ignorado: [] as Link[], ok: 0, pendiente: 0 };
     for (const l of state.links) {
-      const c = classify(l.checkStatus);
+      const c = classify(l.checkStatus, l.url, l.checkIgnored);
       if (c === 'roto') groups.roto.push(l);
       else if (c === 'aviso') groups.aviso.push(l);
+      else if (c === 'privado') groups.privado.push(l);
+      else if (c === 'protegido') groups.protegido.push(l);
+      else if (c === 'ignorado') groups.ignorado.push(l);
       else if (c === 'ok') groups.ok++;
       else groups.pendiente++;
     }
-    const table = (title: string, kind: 'roto' | 'aviso', list: Link[]) =>
+
+    const chipText = (kind: string, l: Link): string => {
+      if (kind === 'privado') return 'Privado o inexistente (404)';
+      if (kind === 'protegido') return `Protegida (HTTP ${l.checkStatus})`;
+      return /^\d+$/.test(l.checkStatus ?? '') ? `HTTP ${l.checkStatus}` : (l.checkStatus ?? '');
+    };
+
+    const row = (l: Link, kind: 'roto' | 'aviso' | 'privado' | 'protegido' | 'ignorado') => {
+      const okBtn =
+        kind === 'ignorado'
+          ? h('button', { class: 'btn', text: 'Volver a vigilar', attrs: { type: 'button' }, on: { click: () => run(() => api('PATCH', `/api/links/${l.id}`, { checkIgnored: false }), reload) } })
+          : (kind === 'roto' || kind === 'aviso' || kind === 'privado' || kind === 'protegido')
+            ? h('button', { class: 'btn', text: 'Está bien', attrs: { type: 'button' }, on: { click: () => run(() => api('PATCH', `/api/links/${l.id}`, { checkIgnored: true }), reload, 'Enlace ignorado. Puedes volver a vigilarlo en «Ignorados».') } })
+            : null;
+      return h(
+        'tr',
+        null,
+        h('td', null, h('a', { text: l.title, attrs: { href: l.url, target: '_blank', rel: 'noopener noreferrer' } }), h('div', { class: 'secundario', text: l.url })),
+        h('td', { text: familyLabel(l.familyId) }),
+        h('td', null, h('span', { class: `chip ${kind}`, text: chipText(kind, l) })),
+        h(
+          'td',
+          null,
+          iconButton('✎', 'Editar', () => linkDialog(l, null, async () => { await reload(); })),
+          iconButton('🗑', 'Borrar', () =>
+            confirmDialog('Borrar enlace', `¿Borrar «${l.title}»?`, 'Borrar', () => run(() => api('DELETE', `/api/links/${l.id}`), reload)),
+          ),
+          okBtn,
+        ),
+      );
+    };
+
+    const simpleTable = (list: Link[], kind: 'roto' | 'aviso' | 'privado' | 'protegido' | 'ignorado') =>
       list.length
-        ? [
-            h('h3', { text: `${title} (${list.length})` }),
-            h(
-              'table',
-              { class: 'tabla' },
-              h('thead', null, h('tr', null, h('th', { text: 'Enlace' }), h('th', { text: 'Familia' }), h('th', { text: 'Estado' }), h('th', { text: '' }))),
-              h(
-                'tbody',
-                null,
-                ...list.map((l) =>
-                  h(
-                    'tr',
-                    null,
-                    h('td', null, h('a', { text: l.title, attrs: { href: l.url, target: '_blank', rel: 'noopener noreferrer' } }), h('div', { class: 'secundario', text: l.url })),
-                    h('td', { text: familyLabel(l.familyId) }),
-                    h('td', null, h('span', { class: `chip ${kind}`, text: /^\d+$/.test(l.checkStatus ?? '') ? `HTTP ${l.checkStatus}` : (l.checkStatus ?? '') })),
-                    h(
-                      'td',
-                      null,
-                      iconButton('✎', 'Editar', () => linkDialog(l, null, async () => { await reload(); })),
-                      iconButton('🗑', 'Borrar', () =>
-                        confirmDialog('Borrar enlace', `¿Borrar «${l.title}»?`, 'Borrar', () => run(() => api('DELETE', `/api/links/${l.id}`), reload)),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ]
-        : [];
+        ? h(
+            'table',
+            { class: 'tabla' },
+            h('thead', null, h('tr', null, h('th', { text: 'Enlace' }), h('th', { text: 'Familia' }), h('th', { text: 'Estado' }), h('th', { text: '' }))),
+            h('tbody', null, ...list.map((l) => row(l, kind))),
+          )
+        : null;
+
     // Si casi todo falla por red, lo probable es que el servidor no tenga salida a Internet.
     const network = groups.roto.filter((l) => !/^\d+$/.test(l.checkStatus ?? '')).length;
     const suspicious = network > 5 && network > state.links.length * 0.6;
+
+    const rotoSection = groups.roto.length
+      ? [h('h3', { text: `Rotos (${groups.roto.length})` }), simpleTable(groups.roto, 'roto')!]
+      : [];
+    const avisoSection = groups.aviso.length
+      ? [h('h3', { text: `A revisar (límites de uso, errores del servidor o tiempo agotado) (${groups.aviso.length})` }), simpleTable(groups.aviso, 'aviso')!]
+      : [];
+
+    const buildDetails = (title: string, ayudaText: string, list: Link[], kind: 'privado' | 'protegido' | 'ignorado', withBulk: boolean) => {
+      if (!list.length) return null;
+      const nodes: any[] = [];
+      nodes.push(h('summary', { text: `${title} (${list.length})` }));
+      if (ayudaText) nodes.push(h('p', { class: 'ayuda', text: ayudaText }));
+      if (withBulk) {
+        nodes.push(h('p', null, h('button', {
+          class: 'btn',
+          text: 'Está bien (todos)',
+          attrs: { type: 'button' },
+          on: {
+            click: () => confirmDialog(
+              title,
+              `¿Marcar los ${list.length} enlaces como correctos?`,
+              'Está bien',
+              async () => {
+                for (const l of list) await api('PATCH', `/api/links/${l.id}`, { checkIgnored: true });
+                await reload();
+              },
+            ),
+          },
+        })));
+      }
+      const t = simpleTable(list, kind);
+      if (t) nodes.push(t);
+      return h('details', null, ...nodes);
+    };
+
+    const privadoDetails = buildDetails('Posibles repositorios privados de GitHub', 'GitHub responde 404 tanto si el repositorio no existe como si es privado, y sin iniciar sesión no se puede distinguir. Si sabes que existe, márcalo como «Está bien».', groups.privado, 'privado', true);
+    const protegidoDetails = buildDetails('Protegidos', 'La página responde, pero pide iniciar sesión o bloquea las comprobaciones automáticas. No está rota.', groups.protegido, 'protegido', true);
+    const ignoradoDetails = buildDetails('Ignorados', '', groups.ignorado, 'ignorado', false);
+
     clear(
       results,
       suspicious
@@ -532,14 +585,21 @@ function renderChecker(container: HTMLElement, reload: Reload): void {
         'div',
         { class: 'resumen' },
         h('span', null, h('b', { text: String(groups.ok) }), ' bien'),
+        groups.protegido.length ? h('span', null, h('b', { text: String(groups.protegido.length) }), ' protegidos') : null,
+        groups.privado.length ? h('span', null, h('b', { text: String(groups.privado.length) }), ' posibles privados (GitHub)') : null,
         h('span', null, h('b', { text: String(groups.aviso.length) }), ' a revisar'),
         h('span', null, h('b', { text: String(groups.roto.length) }), ' rotos'),
+        groups.ignorado.length ? h('span', null, h('b', { text: String(groups.ignorado.length) }), ' ignorados') : null,
         groups.pendiente ? h('span', null, h('b', { text: String(groups.pendiente) }), ' sin comprobar') : null,
       ),
-      ...table('Rotos', 'roto', groups.roto),
-      ...table('A revisar (requieren login, limitan peticiones o dan error del servidor)', 'aviso', groups.aviso),
+      ...rotoSection,
+      ...avisoSection,
+      privadoDetails,
+      protegidoDetails,
+      ignoradoDetails,
     );
   };
+
 
   const poll = async () => {
     try {
@@ -572,7 +632,7 @@ function renderChecker(container: HTMLElement, reload: Reload): void {
     h(
       'div',
       { class: 'seccion' },
-      h('p', { class: 'ayuda', text: 'Comprueba bajo demanda si cada enlace responde. Nunca se hace automáticamente. Algunas webs bloquean las comprobaciones automáticas o exigen login: aparecen como «a revisar», no como rotas.' }),
+      h('p', { class: 'ayuda', text: 'Comprueba bajo demanda si cada enlace responde. Nunca se hace automáticamente. Algunas webs bloquean las comprobaciones automáticas o exigen login: aparecen como «protegidos». Los repositorios privados de GitHub salen como «posibles privados». Ninguno cuenta como roto.' }),
       startBtn,
       progress,
       status,

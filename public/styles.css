@@ -414,6 +414,8 @@ p.error { color: var(--warn); max-width: 80ch; }
 .chip.roto { color: var(--danger); border-color: var(--chip-danger-border); }
 .chip.aviso { color: var(--warn); border-color: var(--chip-warn-border); }
 .chip.ok { color: var(--ok); border-color: var(--chip-ok-border); }
+.chip.privado { color: var(--muted); border-color: var(--line); }
+.chip.protegido { color: var(--muted); border-color: var(--line); }
 .progreso { height: 0.375rem; background: var(--panel-2); border-radius: 0.1875rem; overflow: hidden; margin: .6rem 0; max-width: 26.25rem; }
 .progreso div { height: 100%; background: var(--accent); width: 0; transition: width .3s; }
 table.tabla { width: 100%; border-collapse: collapse; font-size: 0.78125rem; }
