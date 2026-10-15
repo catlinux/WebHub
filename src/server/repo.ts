@@ -249,6 +249,22 @@ export class Repo {
     return (this.db.prepare('SELECT url FROM links').all() as { url: string }[]).map((r) => r.url);
   }
 
+  /** Etiquetas distintas de todos los enlaces, ordenadas por frecuencia descendente y luego alfabéticamente (máx. 500). */
+  usedTags(): string[] {
+    const rows = this.db.prepare('SELECT tags FROM links').all() as { tags: string }[];
+    const counts = new Map<string, number>();
+    for (const row of rows) {
+      const tags = safeTags(row.tags);
+      for (const t of tags) {
+        counts.set(t, (counts.get(t) ?? 0) + 1);
+      }
+    }
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+      .slice(0, 500)
+      .map(([t]) => t);
+  }
+
   hostKnown(host: string): boolean {
     return this.allUrls().some((u) => {
       try {

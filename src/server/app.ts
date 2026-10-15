@@ -12,6 +12,7 @@ import { listPasskeys, getPasskey, countPasskeys, insertPasskey, updatePasskeyUs
 import { getFavicon } from './favicons.ts';
 import { getAspecto, setAspecto } from './aspecto.ts';
 import { logAccess, listAccess, accessSummary, omittedCount } from './accesos.ts';
+import { LimitadorAnalisis, ErrorAnalisis, analizarUrl } from './analisis.ts';
 import { parseBookmarksHtml, planImport } from '../shared/bookmarks.ts';
 
 export interface AppOptions {
@@ -23,6 +24,8 @@ export interface AppOptions {
   sessionDays?: number;
   limiter?: LoginLimiter;
   checker?: LinkChecker;
+  analisisLimiter?: LimitadorAnalisis;
+  analisisTimeoutMs?: number;
 }
 
 const COOKIE = 'webhub_sesion';
@@ -58,6 +61,7 @@ export function createApp(opts: AppOptions): { server: Server; repo: Repo } {
   const db = opts.db;
   const limiter = opts.limiter ?? new LoginLimiter();
   const checker = opts.checker ?? new LinkChecker(repo);
+  const analisisLimiter = opts.analisisLimiter ?? new LimitadorAnalisis();
   const publicDir = opts.publicDir ?? DEFAULT_PUBLIC;
   const sessionDays = opts.sessionDays ?? 30;
   const regChallenges = new ChallengeStore();
@@ -169,6 +173,37 @@ export function createApp(opts: AppOptions): { server: Server; repo: Repo } {
   api.on('POST', '/api/links/:id/click', (ctx) => {
     repo.registerClick(idParam(ctx));
     ctx.res.writeHead(204).end();
+  });
+
+  api.on('POST', '/api/links/analizar', async (ctx) => {
+    const body = await readJson(ctx.req, 4096);
+    if (!analisisLimiter.permitir()) {
+      throw new HttpError(429, 'Demasiados análisis seguidos. Espera un minuto.', { 'Retry-After': '60' });
+    }
+    const url = (body as Record<string, unknown>).url;
+    if (typeof url !== 'string') throw new HttpError(400, 'URL no válida.');
+    const timeoutMs = opts.analisisTimeoutMs ?? 8000;
+    try {
+      const resultado = await analizarUrl(url, repo.usedTags(), timeoutMs);
+      sendJson(ctx.res, 200, resultado);
+    } catch (err) {
+      if (err instanceof ErrorAnalisis) {
+        switch (err.motivo) {
+          case 'url':
+            throw new HttpError(400, 'URL no válida.');
+          case 'bloqueada':
+            throw new HttpError(422, 'No se puede analizar una dirección interna.');
+          case 'no_html':
+          case 'estado':
+            throw new HttpError(422, 'La dirección no devuelve una página web.');
+          case 'tiempo':
+            throw new HttpError(504, 'La página tardó demasiado en responder.');
+          case 'red':
+            throw new HttpError(502, 'No se pudo descargar la página.');
+        }
+      }
+      throw err;
+    }
   });
 
   const planFrom = (body: Record<string, unknown>) => {
