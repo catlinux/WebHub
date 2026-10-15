@@ -82,6 +82,8 @@ function renderOrganize(container: HTMLElement, reload: Reload): void {
           click: () => {
             selectedFamily = f.id;
             renderOrganize(container, reload);
+            // En pantallas estrechas los enlaces quedan debajo: se lleva la vista hasta ellos.
+            if (window.matchMedia('(max-width: 1180px)').matches) container.querySelector('.organizar > .panel:nth-child(2)')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
           },
           keydown: (ev) => {
             if (ev.key === 'Enter') (ev.target as HTMLElement).click();
@@ -236,7 +238,8 @@ function renderOrganize(container: HTMLElement, reload: Reload): void {
         h('h3', { text: `Enlaces de «${familyLabel(sel.id)}»` }),
         h('button', { class: 'btn', text: '+ Enlace', attrs: { type: 'button' }, on: { click: () => linkDialog(null, sel.id, reload) } }),
       ),
-      h('p', { class: 'ayuda', text: 'Arrastra por ⠿ para reordenar. Suelta un enlace sobre otra familia (columna izquierda) para moverlo.' }),
+      h('p', { class: 'ayuda ayuda-raton', text: 'Arrastra por ⠿ para reordenar. Suelta un enlace sobre otra familia (columna izquierda) para moverlo.' }),
+      h('p', { class: 'ayuda ayuda-tactil', text: 'Usa ↑ ↓ para reordenar. Para mover un enlace a otra familia, edítalo (✎) y cambia la familia.' }),
       ...(links.length ? links.map(linkRow) : [h('div', { class: 'vacio', text: 'Familia sin enlaces.' })]),
     );
   } else {
@@ -248,6 +251,13 @@ function renderOrganize(container: HTMLElement, reload: Reload): void {
 // ================================================================ Importar marcadores
 
 /** Los navegadores incrustan los favicons en base64 (ICON="data:…"): no los necesitamos y pesan mucho. */
+/** Selector de archivo con texto propio: el nativo muestra «Choose File» según el idioma del navegador. */
+function filePicker(input: HTMLInputElement, label: string): HTMLElement {
+  const name = h('span', { class: 'nombre-archivo', text: 'Ningún archivo elegido' });
+  input.addEventListener('change', () => (name.textContent = input.files?.[0]?.name ?? 'Ningún archivo elegido'));
+  return h('label', { class: 'archivo' }, input, h('span', { class: 'btn', text: label }), name);
+}
+
 function slimBookmarks(html: string): string {
   return html.replace(/\s(ICON|ICON_URI)="[^"]*"/gi, '');
 }
@@ -382,7 +392,7 @@ function renderImport(container: HTMLElement, reload: Reload): void {
       'div',
       { class: 'seccion' },
       h('p', { class: 'ayuda', text: 'Exporta los marcadores desde tu navegador (Chrome/Edge: Administrador de marcadores › ⋮ › Exportar; Firefox: Biblioteca › Importar y respaldar › Exportar a HTML) y elige aquí el archivo. Nada se guarda hasta que confirmes.' }),
-      h('p', null, file),
+      filePicker(file, 'Elegir archivo de marcadores…'),
       h('label', { class: 'check' }, unwrap, 'Subir un nivel el contenido de «Barra de marcadores», «Otros marcadores» y similares'),
       h('label', { class: 'check' }, skipDup, 'No importar duplicados (enlaces que ya están en WebHub o repetidos en el archivo)'),
       preview,
@@ -443,7 +453,7 @@ function renderBackup(container: HTMLElement, reload: Reload): void {
       h('a', { class: 'btn primario', text: 'Descargar copia (JSON)', attrs: { href: '/api/export', download: '' } }),
       h('h3', { text: 'Restaurar' }),
       h('p', { class: 'ayuda', text: 'Restaurar sustituye todo el contenido actual por el de la copia.' }),
-      h('p', null, file),
+      filePicker(file, 'Elegir copia JSON…'),
       info,
     ),
   );

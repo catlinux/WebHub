@@ -17,7 +17,8 @@ Uso personal, un solo usuario. Toda la aplicación (también la lista de enlaces
 - Vistas **Todos** y **Favoritos y más usados** (contador de clics guardado en tu propio servidor).
 - **Teclado**: `Ctrl+K` o `/` para buscar, `↓`/`↑` (o `j`/`k`) para moverse, `Enter` para abrir,
   `f` para marcar favorito, `Esc` para volver al buscador.
-- **Móvil**: la barra lateral se pliega.
+- **Adaptable a móvil y tablet**: la barra lateral se pliega, el panel de administración pasa a una columna
+  y en pantallas táctiles se reordena con botones ↑↓ en lugar de arrastrar.
 - **Panel de administración**:
   - crear, editar, borrar y reordenar (arrastrando o con ↑↓) familias y enlaces; mover enlaces entre familias;
   - importar marcadores del navegador (HTML de Chrome, Edge, Firefox…) con vista previa y detección de duplicados;

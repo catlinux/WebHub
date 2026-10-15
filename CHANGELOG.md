@@ -15,7 +15,8 @@ Primera versión.
 - Vistas «Todos» y «Favoritos y más usados» con contador de clics en el servidor.
 - Búsqueda instantánea por título, dominio, URL, notas, etiquetas y familia, sin distinguir tildes.
 - Atajos de teclado: `Ctrl+K` o `/`, flechas o `j`/`k`, `Enter`, `f` y `Esc`.
-- Diseño adaptado a móvil con barra lateral plegable.
+- Diseño adaptable a móvil (vertical y horizontal) y tablet: barra lateral plegable, panel de administración
+  en una columna, tabla del comprobador apilada, botones táctiles más grandes y campos sin zoom en iOS.
 - Inicio de sesión con contraseña (scrypt), cookie `HttpOnly` + `Secure` + `SameSite=Strict`,
   límite de intentos por IP y global, y protección CSRF.
 - Panel de administración: crear, editar, borrar, reordenar (arrastrando o con botones) y mover familias y enlaces;
