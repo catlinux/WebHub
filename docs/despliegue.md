@@ -151,7 +151,7 @@ Añade el bloque de [Caddyfile.ejemplo](Caddyfile.ejemplo) con tu dominio, `sudo
 - Apache como proxy inverso y certificado de Let's Encrypt con Certbot; HTTP redirige a HTTPS (301).
 - `curl -I https://…`: 200 con HSTS, CSP, `X-Frame-Options`, `Referrer-Policy` y `Permissions-Policy`.
 - PIN incorrecto → 401; petición con `Origin` ajeno → 403; el PIN no aparece en los registros.
-- Entrada con el PIN desde el navegador del ordenador, a través de HTTPS (cookie `Secure`).
+- Entrada con el PIN desde el navegador del ordenador y desde el móvil, a través de HTTPS (cookie `Secure`).
 - Copia en línea con `VACUUM INTO` desde el contenedor.
 - Docker habilitado al arranque y contenedor con `restart: unless-stopped`.
 
@@ -164,7 +164,6 @@ en Firefox/Safari.
 **No probado:**
 
 - Un reinicio real del VPS.
-- Entrada desde el móvil (pendiente de confirmar).
 - Que el límite de intentos vea la IP real del cliente a través de Apache y Docker (debería: la última IP de
   `X-Forwarded-For` es la que añade Apache).
 - `certbot renew --dry-run` desde esta guía (lo ejecuta el administrador con sudo).
