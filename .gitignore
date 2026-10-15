@@ -4,3 +4,16 @@ public/app.js
 public/app.js.map
 *.log
 .env
+
+# Archivos locales de herramientas de IA y del editor: nunca al repositorio
+.agents/
+.claude/
+CLAUDE.md
+AGENTS.md
+.cursor/
+.cursorrules
+.windsurf/
+.github/copilot-instructions.md
+.aider*
+.continue/
+.vscode/
