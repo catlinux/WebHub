@@ -8,6 +8,7 @@ import { createApp } from '../src/server/app.ts';
 import { setPin, LoginLimiter } from '../src/server/auth.ts';
 import { iconHrefsFromHtml } from '../src/server/favicons.ts';
 import { classify, checkUrl } from '../src/server/checker.ts';
+import { permitirRedesPrivadas } from '../src/server/fetcher.ts';
 
 const PIN = '20261015';
 let server: Server;
@@ -240,6 +241,7 @@ test('iconHrefsFromHtml resuelve rutas relativas y prefiere icon a apple-touch',
 });
 
 test('comprobador: clasifica estados y prueba contra un servidor local', async () => {
+  permitirRedesPrivadas(true);
   assert.equal(classify('200'), 'ok');
   assert.equal(classify('301'), 'ok');
   assert.equal(classify('403'), 'protegido');
@@ -258,4 +260,5 @@ test('comprobador: clasifica estados y prueba contra un servidor local', async (
   assert.equal(await checkUrl(`${u}/sin-head`), '200');
   await new Promise((r) => local.close(r));
   assert.equal(await checkUrl(`${u}/`), 'conexión rechazada', 'servidor ya cerrado');
+  permitirRedesPrivadas(false);
 });
