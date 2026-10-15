@@ -28,3 +28,15 @@ export function isPermutation(current: readonly number[], ids: readonly number[]
 export function byPosition<T extends { position: number; id: number }>(a: T, b: T): number {
   return a.position - b.position || a.id - b.id;
 }
+
+/**
+ * Resultado de soltar `dragged` antes o después de `target` en una lista de ids.
+ * Si alguno no está en la lista, la devuelve sin cambios.
+ */
+export function dropReorder(ids: readonly number[], dragged: number, target: number, after: boolean): number[] {
+  if (dragged === target || !ids.includes(dragged) || !ids.includes(target)) return ids.slice();
+  const out = ids.filter((id) => id !== dragged);
+  const i = out.indexOf(target);
+  out.splice(after ? i + 1 : i, 0, dragged);
+  return out;
+}

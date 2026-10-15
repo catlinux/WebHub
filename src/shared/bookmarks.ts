@@ -12,6 +12,8 @@ export interface BookmarkLink {
   title: string;
   href: string;
   note: string;
+  /** Posición en el archivo: decide cuál de dos duplicados es el original. */
+  order: number;
 }
 
 const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
@@ -45,6 +47,7 @@ export function parseBookmarksHtml(html: string): BookmarkFolder {
   const stack: BookmarkFolder[] = [];
   let pending: BookmarkFolder | null = null;
   let lastLink: BookmarkLink | null = null;
+  let order = 0;
 
   const token = /<h3([^>]*)>([\s\S]*?)<\/h3>|<dl[^>]*>|<\/dl>|<a\s([^>]*)>([\s\S]*?)<\/a>|<dd>([^<]*)/gi;
   for (let m = token.exec(html); m; m = token.exec(html)) {
@@ -67,7 +70,7 @@ export function parseBookmarksHtml(html: string): BookmarkFolder {
       if (stack.length > 1) stack.pop();
       lastLink = null;
     } else if (m[3] !== undefined) {
-      const link = { title: clean(m[4] ?? ''), href: attr(m[3], 'href'), note: '' };
+      const link = { title: clean(m[4] ?? ''), href: attr(m[3], 'href'), note: '', order: order++ };
       (stack[stack.length - 1] ?? root).links.push(link);
       lastLink = link;
     } else if (m[5] !== undefined && lastLink) {
@@ -135,7 +138,18 @@ const LOOSE_NAME = 'Importados';
  */
 export function planImport(root: BookmarkFolder, options: PlanOptions): ImportPlan {
   const existing = new Set(options.existingUrls.map(duplicateKey));
-  const seenInFile = new Set<string>();
+  // Primera aparición de cada URL en el archivo (en orden del documento).
+  const firstInFile = new Map<string, number>();
+  const collect = (f: BookmarkFolder) => {
+    for (const l of f.links) {
+      const u = normalizeUrl(l.href);
+      if (!u) continue;
+      const k = duplicateKey(u);
+      if (!firstInFile.has(k) || (firstInFile.get(k) as number) > l.order) firstInFile.set(k, l.order);
+    }
+    f.folders.forEach(collect);
+  };
+  collect(root);
   const groups = new Map<string, PlanGroup>();
   let invalid = 0;
   let duplicates = 0;
@@ -183,8 +197,7 @@ export function planImport(root: BookmarkFolder, options: PlanOptions): ImportPl
       const key = duplicateKey(url);
       let duplicate: DuplicateKind = null;
       if (existing.has(key)) duplicate = 'existing';
-      else if (seenInFile.has(key)) duplicate = 'inFile';
-      seenInFile.add(key);
+      else if (firstInFile.get(key) !== l.order) duplicate = 'inFile';
       if (duplicate) duplicates++;
       total++;
       groupFor(path).links.push({

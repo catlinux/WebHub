@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { byPosition, isPermutation, moveItem } from '../src/shared/order.ts';
+import { byPosition, dropReorder, isPermutation, moveItem } from '../src/shared/order.ts';
 import { fold, scoreLink, searchLinks } from '../src/shared/search.ts';
 
 test('moveItem mueve hacia delante, hacia atrás y limita índices', () => {
@@ -57,4 +57,12 @@ test('prioriza coincidencias al inicio del título y desempata por clics', () =>
 
 test('sin tildes encuentra con tildes', () => {
   assert.deepEqual(searchLinks([L('Administración', 'a.es')], 'administracion').map((l) => l.title), ['Administración']);
+});
+
+test('dropReorder coloca antes o después del destino', () => {
+  assert.deepEqual(dropReorder([1, 2, 3, 4], 1, 3, false), [2, 1, 3, 4]);
+  assert.deepEqual(dropReorder([1, 2, 3, 4], 1, 3, true), [2, 3, 1, 4]);
+  assert.deepEqual(dropReorder([1, 2, 3, 4], 4, 1, false), [4, 1, 2, 3]);
+  assert.deepEqual(dropReorder([1, 2, 3], 2, 2, true), [1, 2, 3]);
+  assert.deepEqual(dropReorder([1, 2, 3], 9, 2, true), [1, 2, 3]);
 });

@@ -1,5 +1,6 @@
 import type { Repo } from './repo.ts';
 import { describeError, fetchLimited } from './fetcher.ts';
+export { classify } from '../shared/check.ts';
 
 export interface CheckJob {
   running: boolean;
@@ -18,16 +19,6 @@ export async function checkUrl(url: string): Promise<string> {
   } catch (err) {
     return describeError(err);
   }
-}
-
-/** Clasifica un estado guardado: «ok», «aviso» (requiere login, límite…) o «roto». */
-export function classify(status: string | null): 'ok' | 'aviso' | 'roto' | null {
-  if (!status) return null;
-  const code = Number(status);
-  if (!Number.isInteger(code)) return status === 'tiempo agotado' ? 'aviso' : 'roto';
-  if (code < 400) return 'ok';
-  if ([401, 403, 429].includes(code) || code >= 500) return 'aviso';
-  return 'roto';
 }
 
 /** Ejecuta la comprobación de todos los enlaces bajo demanda, con concurrencia limitada. */

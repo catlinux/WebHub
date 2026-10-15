@@ -79,3 +79,15 @@ test('los enlaces sueltos de la raíz van a «Importados» y se reutilizan famil
   assert.equal(plan.invalid, 1);
   assert.equal(plan.groups.find((g) => g.name === 'Interés')!.existingFamilyId, 7);
 });
+
+test('entre duplicados del archivo se conserva el primero en orden del documento', () => {
+  const html = `<DL><p>
+    <DT><H3>Redes</H3>
+    <DL><p><DT><A HREF="https://github.com/catlinux">GitHub</A></DL><p>
+    <DT><A HREF="https://github.com/catlinux/">GitHub suelto</A>
+  </DL>`;
+  const plan = planImport(parseBookmarksHtml(html), noExisting);
+  const all = plan.groups.flatMap((g) => g.links);
+  assert.equal(all.find((l) => l.title === 'GitHub')!.duplicate, null);
+  assert.equal(all.find((l) => l.title === 'GitHub suelto')!.duplicate, 'inFile');
+});
