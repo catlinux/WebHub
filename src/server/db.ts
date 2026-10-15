@@ -67,6 +67,7 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX access_log_at ON access_log(at);
   `,
+  `ALTER TABLE links ADD COLUMN check_ignored INTEGER NOT NULL DEFAULT 0;`,
 ];
 
 /** Abre (o crea) la base de datos y aplica las migraciones pendientes. */

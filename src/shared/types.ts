@@ -20,6 +20,7 @@ export interface Link {
   lastClickAt: string | null;
   checkStatus: string | null;
   checkedAt: string | null;
+  checkIgnored: boolean;
 }
 
 export interface Snapshot {

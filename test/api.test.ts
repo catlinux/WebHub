@@ -242,7 +242,7 @@ test('iconHrefsFromHtml resuelve rutas relativas y prefiere icon a apple-touch',
 test('comprobador: clasifica estados y prueba contra un servidor local', async () => {
   assert.equal(classify('200'), 'ok');
   assert.equal(classify('301'), 'ok');
-  assert.equal(classify('403'), 'aviso');
+  assert.equal(classify('403'), 'protegido');
   assert.equal(classify('503'), 'aviso');
   assert.equal(classify('404'), 'roto');
   assert.equal(classify('dominio no encontrado'), 'roto');

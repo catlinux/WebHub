@@ -12,6 +12,7 @@ interface FamilyRow { id: number; parent_id: number | null; name: string; positi
 interface LinkRow {
   id: number; family_id: number; title: string; url: string; note: string; tags: string; favorite: number;
   position: number; clicks: number; last_click_at: string | null; check_status: string | null; checked_at: string | null;
+  check_ignored: number;
 }
 
 const toFamily = (r: FamilyRow): Family => ({ id: r.id, parentId: r.parent_id, name: r.name, position: r.position, collapsed: r.collapsed === 1 });
@@ -29,6 +30,7 @@ const toLink = (r: LinkRow): Link => ({
   lastClickAt: r.last_click_at,
   checkStatus: r.check_status,
   checkedAt: r.checked_at,
+  checkIgnored: r.check_ignored === 1,
 });
 
 function safeTags(json: string): string[] {
@@ -188,14 +190,19 @@ export class Repo {
     const note = input.note === undefined ? cur.note : text(input.note, 'nota', 500);
     const tags = input.tags === undefined ? cur.tags : JSON.stringify(parseTags(input.tags as string | string[]));
     const favorite = input.favorite === undefined ? cur.favorite : input.favorite ? 1 : 0;
+    let checkIgnored = cur.check_ignored;
+    if (input.checkIgnored !== undefined) {
+      if (typeof input.checkIgnored !== 'boolean') throw new InputError('El campo checkIgnored debe ser verdadero o falso.');
+      checkIgnored = input.checkIgnored ? 1 : 0;
+    }
     const urlChanged = u !== cur.url;
     this.db
       .prepare(
-        `UPDATE links SET family_id = ?, position = ?, title = ?, url = ?, note = ?, tags = ?, favorite = ?, updated_at = ?,
+        `UPDATE links SET family_id = ?, position = ?, title = ?, url = ?, note = ?, tags = ?, favorite = ?, check_ignored = ?, updated_at = ?,
          check_status = CASE WHEN ? THEN NULL ELSE check_status END, checked_at = CASE WHEN ? THEN NULL ELSE checked_at END
          WHERE id = ?`,
       )
-      .run(familyId, position, title, u, note, tags, favorite, nowIso(), urlChanged ? 1 : 0, urlChanged ? 1 : 0, id);
+      .run(familyId, position, title, u, note, tags, favorite, checkIgnored, nowIso(), urlChanged ? 1 : 0, urlChanged ? 1 : 0, id);
     return toLink(this.link(id));
   }
 
@@ -272,8 +279,8 @@ export class Repo {
       formato: 1,
       exportado: nowIso(),
       families: families.map(({ id, parentId, name, position, collapsed }) => ({ id, parentId, name, position, collapsed })),
-      links: links.map(({ id, familyId, title, url, note, tags, favorite, position, clicks, lastClickAt }) => ({
-        id, familyId, title, url, note, tags, favorite, position, clicks, lastClickAt,
+      links: links.map(({ id, familyId, title, url, note, tags, favorite, position, clicks, lastClickAt, checkIgnored }) => ({
+        id, familyId, title, url, note, tags, favorite, position, clicks, lastClickAt, checkIgnored,
       })),
     };
   }
@@ -308,6 +315,9 @@ export class Repo {
             typeof l.lastClickAt === 'string' ? l.lastClickAt : null,
             created.id,
           );
+        }
+        if (l.checkIgnored === true) {
+          this.db.prepare('UPDATE links SET check_ignored = 1 WHERE id = ?').run(created.id);
         }
       }
       return { families: families.length, links: links.length };
