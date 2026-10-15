@@ -386,10 +386,28 @@ const plegados = (() => {
   }
 })();
 
-function alternarPlegado(key: string): void {
-  if (!plegados.delete(key)) plegados.add(key);
+const CLAVE_DESPLEGADOS = 'webhub.desplegados';
+const desplegados = (() => {
+  try {
+    const raw: unknown = JSON.parse(localStorage.getItem(CLAVE_DESPLEGADOS) ?? '[]');
+    return new Set(Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : []);
+  } catch {
+    return new Set<string>();
+  }
+})();
+
+function alternarPlegado(key: string, defaultCollapsed = false): void {
+  const nowCollapsed = plegados.has(key) || (defaultCollapsed && !desplegados.has(key));
+  if (nowCollapsed) {
+    plegados.delete(key);
+    if (defaultCollapsed) desplegados.add(key);
+  } else {
+    desplegados.delete(key);
+    plegados.add(key);
+  }
   try {
     localStorage.setItem(CLAVE_PLEGADOS, JSON.stringify([...plegados]));
+    localStorage.setItem(CLAVE_DESPLEGADOS, JSON.stringify([...desplegados]));
   } catch {
     /* sin almacenamiento local */
   }
@@ -459,11 +477,14 @@ interface BlockOptions {
   key?: string;
   /** Familia que representa el bloque; si se indica, se puede arrastrar para reordenarla. */
   family?: Family;
+  /** Marca «plegada por defecto» de la familia que representa el bloque. */
+  defaultCollapsed?: boolean;
 }
 
 function block(title: string | null, links: Link[], opts: BlockOptions = {}): HTMLElement | null {
   if (links.length === 0) return null;
-  const collapsed = !!title && !!opts.key && plegados.has(opts.key);
+  const defaultCollapsed = opts.defaultCollapsed === true;
+  const collapsed = !!title && !!opts.key && (plegados.has(opts.key) || (defaultCollapsed && !desplegados.has(opts.key)));
   const section = h('section', { class: `bloque${collapsed ? ' plegado' : ''}` });
   if (title) {
     const head = h('h3');
@@ -475,7 +496,7 @@ function block(title: string | null, links: Link[], opts: BlockOptions = {}): HT
           text: '▾',
           data: { plegar: key },
           attrs: { type: 'button', 'aria-expanded': String(!collapsed), 'aria-label': `${collapsed ? 'Desplegar' : 'Plegar'} ${title}` },
-          on: { click: () => alternarPlegado(key) },
+          on: { click: () => alternarPlegado(key, defaultCollapsed) },
         }),
       );
     }
@@ -564,8 +585,8 @@ function renderContent(): void {
       addLinkButton(f.id),
     ]);
     const blocks = [
-      block(kids.length ? f.name : null, linksOf(f.id), { key: `f${f.id}` }),
-      ...kids.map((c) => block(c.name, linksOf(c.id), { href: `#/f/${c.id}`, key: `f${c.id}`, family: c })),
+      block(kids.length ? f.name : null, linksOf(f.id), { key: `f${f.id}`, defaultCollapsed: f.collapsed }),
+      ...kids.map((c) => block(c.name, linksOf(c.id), { href: `#/f/${c.id}`, key: `f${c.id}`, family: c, defaultCollapsed: c.collapsed })),
     ].filter(Boolean);
     clear(content, blocks.length ? h('div', { class: 'columnas' }, ...blocks) : emptyState('Esta familia está vacía.'));
     return;
@@ -575,8 +596,8 @@ function renderContent(): void {
   setHeader('Todos', state.links.length, [addLinkButton(null)]);
   const blocks: (HTMLElement | null)[] = [];
   for (const f of topFamilies()) {
-    blocks.push(block(f.name, linksOf(f.id), { href: `#/f/${f.id}`, key: `f${f.id}`, family: f }));
-    for (const c of childrenOf(f.id)) blocks.push(block(`${f.name} › ${c.name}`, linksOf(c.id), { href: `#/f/${c.id}`, key: `f${c.id}`, family: c }));
+    blocks.push(block(f.name, linksOf(f.id), { href: `#/f/${f.id}`, key: `f${f.id}`, family: f, defaultCollapsed: f.collapsed }));
+    for (const c of childrenOf(f.id)) blocks.push(block(`${f.name} › ${c.name}`, linksOf(c.id), { href: `#/f/${c.id}`, key: `f${c.id}`, family: c, defaultCollapsed: c.collapsed }));
   }
   const visible = blocks.filter(Boolean);
   clear(content, visible.length ? h('div', { class: 'columnas' }, ...visible) : emptyState('Las familias están vacías. Añade enlaces con «+ Enlace».'));

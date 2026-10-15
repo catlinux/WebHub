@@ -103,14 +103,17 @@ export function familyDialog(family: Family | null, parentId: number | null, onD
   const name = h('input', { class: 'campo', attrs: { type: 'text', required: true, value: family?.name ?? '', maxlength: 80, placeholder: 'Proveedores, Redes, Mis webs…' } });
   const hasKids = family ? childrenOf(family.id).length > 0 : false;
   const parent = familySelect(family ? family.parentId : parentId, { includeNone: '— Ninguna (familia principal) —', onlyTop: true, exclude: family?.id });
+  const collapsedCb = h('input', { attrs: { type: 'checkbox', checked: family?.collapsed ?? false } });
   const body: Node[] = [...field('Nombre', name)];
   if (!hasKids) body.push(...field('Dentro de', parent));
+  body.push(h('label', { class: 'check' }, collapsedCb, 'Mostrar sus enlaces plegados por defecto'));
+  body.push(h('p', { class: 'ayuda', text: 'Con la flecha ▾ puedes desplegarla en cada dispositivo.' }));
   openDialog({
     title: family ? `Editar «${family.name}»` : parentId ? `Nueva subfamilia de «${familyLabel(parentId)}»` : 'Nueva familia',
     body,
     submitLabel: family ? 'Guardar' : 'Crear',
     submit: async () => {
-      const body: Record<string, unknown> = { name: name.value };
+      const body: Record<string, unknown> = { name: name.value, collapsed: collapsedCb.checked };
       if (!hasKids) body.parentId = parent.value ? Number(parent.value) : null;
       if (family) await api('PATCH', `/api/families/${family.id}`, body);
       else await api('POST', '/api/families', body);
