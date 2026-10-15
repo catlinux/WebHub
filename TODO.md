@@ -1,5 +1,11 @@
 # TODO
 
+## Pendiente
+
+- [ ] Entrada con huella (passkeys/WebAuthn) en el móvil, manteniendo el PIN como alternativa (versión 0.2.0).
+- [ ] Copia automática de `data/` en el VPS (temporizador con `VACUUM INTO`) y confirmar si la copia Borg
+      del servidor incluye `/opt/contabo-apps/webhub/data`.
+
 ## Pendiente de decidir
 
 - [ ] Campo «Referencia KeePassXC» por enlace (solo texto con la ruta de la entrada, p. ej. `Proveedores/OVH`,

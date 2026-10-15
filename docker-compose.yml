@@ -1,0 +1,51 @@
+# WebHub en Docker: el código se monta de solo lectura y solo data/ es escribible.
+# El puerto se publica únicamente en 127.0.0.1; delante va el proxy inverso (Apache o Caddy).
+# Ajusta WEBHUB_PUBLIC_ORIGIN a tu dominio y "user" al uid:gid dueño del directorio (id -u, id -g).
+#
+#   docker compose run --rm build          # npm ci + public/app.js (también tras cada git pull)
+#   docker compose run --rm webhub npm run pin
+#   docker compose up -d
+
+x-comun: &comun
+  image: node:22-alpine
+  user: "1001:1001"
+  working_dir: /app
+  environment: &entorno
+    HOME: /tmp
+
+services:
+  webhub:
+    <<: *comun
+    command: ["node", "--disable-warning=ExperimentalWarning", "src/server/main.ts"]
+    environment:
+      <<: *entorno
+      NODE_ENV: production
+      WEBHUB_HOST: 0.0.0.0
+      WEBHUB_PORT: "3000"
+      WEBHUB_DATA_DIR: /app/data
+      WEBHUB_TRUST_PROXY: "1"
+      WEBHUB_PUBLIC_ORIGIN: https://webhub.invierteconcriterio.es
+    volumes:
+      - .:/app:ro
+      - ./data:/app/data
+    ports:
+      - "127.0.0.1:3000:3000"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  build:
+    <<: *comun
+    profiles: [herramientas]
+    command: ["sh", "-c", "npm ci && npm run build"]
+    volumes:
+      - .:/app

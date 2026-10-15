@@ -44,7 +44,8 @@ WEBHUB_INSECURE_COOKIE=1 npm start   # http://127.0.0.1:3000
 
 `WEBHUB_INSECURE_COOKIE=1` solo es para probar por `http://` en local. En producción, detrás de HTTPS, no se usa.
 
-Para el servidor (VPS con Caddy) sigue [docs/despliegue.md](docs/despliegue.md).
+En el servidor se ejecuta con Docker (`docker compose`) detrás de Apache con HTTPS de Certbot: sigue
+[docs/despliegue.md](docs/despliegue.md), que incluye también la alternativa con systemd y Caddy.
 
 ## Configuración
 
@@ -52,10 +53,10 @@ Por variables de entorno:
 
 | Variable | Por defecto | Uso |
 |---|---|---|
-| `WEBHUB_HOST` | `127.0.0.1` | Interfaz de escucha. Déjalo en local y pon Caddy delante. |
+| `WEBHUB_HOST` | `127.0.0.1` | Interfaz de escucha. Déjalo en local y pon un proxy inverso (Apache, Caddy) delante. En Docker, `0.0.0.0` con el puerto publicado solo en `127.0.0.1`. |
 | `WEBHUB_PORT` | `3000` | Puerto. |
 | `WEBHUB_DATA_DIR` | `./data` | Carpeta de la base de datos SQLite. |
-| `WEBHUB_TRUST_PROXY` | (vacío) | `1` detrás de Caddy: usa la IP de `X-Forwarded-For` para el límite de intentos. |
+| `WEBHUB_TRUST_PROXY` | (vacío) | `1` detrás del proxy inverso: usa la IP de `X-Forwarded-For` para el límite de intentos. |
 | `WEBHUB_PUBLIC_ORIGIN` | (vacío) | p. ej. `https://webhub.ejemplo.com`. Si se define, las peticiones de escritura deben venir de ese origen. |
 | `WEBHUB_SESSION_DAYS` | `30` | Duración de la sesión. |
 | `WEBHUB_INSECURE_COOKIE` | (vacío) | `1` quita el atributo `Secure` de la cookie (solo desarrollo). |
@@ -68,7 +69,7 @@ Por variables de entorno:
 - Límite de intentos pensado para un PIN: 5 fallos por IP en 15 minutos y, además, un **bloqueo global escalonado**:
   cada 10 fallos seguidos (vengan de las IP que vengan) se bloquea el acceso 15 min, luego 30 min, 1 h… hasta 24 h.
   Tras un día de ataque solo se admiten unos 10 intentos diarios: probar un millón de PIN llevaría siglos.
-  Si el bloqueo te afecta a ti, reiniciar el servicio lo borra (`sudo systemctl restart webhub`).
+  Si el bloqueo te afecta a ti, reiniciar el servicio lo borra (`docker compose restart webhub`, o `sudo systemctl restart webhub` sin Docker).
 - Protección CSRF: cabecera propia obligatoria en las escrituras y comprobación de `Origin`.
 - Solo se admiten URLs `http`/`https` (nunca `javascript:` ni `data:`), también al importar.
 - CSP estricta (`script-src 'self'`), sin `innerHTML` con datos del usuario, `X-Frame-Options: DENY` y `Referrer-Policy: no-referrer`.
@@ -91,7 +92,8 @@ src/server/   servidor HTTP (node:http), SQLite (node:sqlite), autenticación, A
 src/client/   interfaz sin framework, empaquetada con esbuild en public/app.js
 public/       HTML, CSS, logo y favicons
 test/         tests (node:test) y prueba e2e
-docs/         guía de despliegue y ejemplos de Caddy y systemd
+docs/         guía de despliegue y ejemplos de Apache, Caddy y systemd
+docker-compose.yml  despliegue con Docker
 ```
 
 El logo y los favicons salen de `assets/icono.png` con `python3 scripts/generar-favicons.py` (requiere Pillow).

@@ -1,0 +1,20 @@
+# Vhost de Apache para WebHub: proxy inverso a 127.0.0.1:3000.
+# Copiar a /etc/apache2/sites-available/webhub.ejemplo.com.conf, cambiar el dominio y activar con a2ensite.
+# Certbot (certbot --apache -d webhub.ejemplo.com) crea a partir de este la versión :443 y la redirección.
+#
+# ProxyPreserveHost y X-Forwarded-Proto son necesarios: WebHub comprueba el Origin de las escrituras
+# contra WEBHUB_PUBLIC_ORIGIN. WebHub ya envía CSP, X-Frame-Options y el resto de cabeceras; aquí solo HSTS.
+
+<VirtualHost *:80>
+    ServerName webhub.ejemplo.com
+
+    ProxyPreserveHost On
+    ProxyPass / http://127.0.0.1:3000/
+    ProxyPassReverse / http://127.0.0.1:3000/
+
+    RequestHeader set X-Forwarded-Proto "https"
+    Header always set Strict-Transport-Security "max-age=31536000"
+
+    ErrorLog ${APACHE_LOG_DIR}/webhub.ejemplo.com-error.log
+    CustomLog ${APACHE_LOG_DIR}/webhub.ejemplo.com-access.log combined
+</VirtualHost>

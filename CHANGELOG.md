@@ -4,6 +4,20 @@ Todos los cambios relevantes de WebHub se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/)
 y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [0.1.1] - 2026-10-15
+
+### Añadido
+
+- `docker-compose.yml`: WebHub en `node:22-alpine` con el código de solo lectura, `data/` montado, puerto solo en
+  `127.0.0.1`, reinicio automático, rotación de registros y un servicio `build` para compilar el cliente.
+- `docs/apache.conf.ejemplo`: vhost de Apache como proxy inverso con HSTS, para usar con Certbot.
+
+### Cambiado
+
+- La guía de despliegue pasa a Docker + Apache + Certbot, con lo comprobado en el VPS real; systemd y Caddy
+  quedan como alternativas.
+- `.gitignore` excluye los archivos locales de herramientas y del editor.
+
 ## [0.1.0] - 2026-10-15
 
 Primera versión.
