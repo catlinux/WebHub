@@ -4,6 +4,76 @@ Todos los cambios relevantes de WebHub se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/)
 y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [0.5.0] - 2026-10-15
+
+### Añadido
+
+- Registro de accesos: la base de datos guarda un registro de entradas
+  (migración 4, tabla `access_log`): entrada con PIN, entrada con huella,
+  PIN incorrecto, huella no válida, bloqueo de entrada, huella añadida y
+  borrada, PIN desactivado y reactivado. De cada evento se guarda fecha,
+  tipo, resultado, IP y una etiqueta corta del dispositivo (por ejemplo
+  «Chrome en Windows», nunca el texto del navegador) y el nombre de la
+  huella cuando procede; nunca se guarda el PIN ni cuerpos de peticiones.
+  Se ve en Administrar › Acceso, con resumen del último acceso correcto y
+  de los intentos fallidos de las últimas 24 horas. Al entrar, si hubo
+  intentos fallidos desde la entrada anterior, sale un aviso superior con
+  «Ver registro». Rutas `GET /api/accesos` y `GET /api/accesos/resumen`
+  (exigen sesión).
+
+- Modo «solo huella»: en Administrar › Acceso se puede desactivar la
+  entrada con PIN (solo si hay al menos una huella registrada), de modo
+  que no hay nada que adivinar. La recuperación es ejecutar
+  `npm run pin` en el servidor (con Docker
+  `docker compose run --rm webhub npm run pin`), que cambia el PIN y
+  reactiva la entrada por PIN. `GET /api/session` devuelve además `pin`.
+  Ruta `PUT /api/acceso/pin`.
+
+- Comprobador de enlaces (Administrar › Enlaces rotos): ahora clasifica en
+  bien, protegidos (HTTP 401 y 403: la página responde pero pide sesión o
+  bloquea las comprobaciones automáticas; no está rota), posibles privados
+  (HTTP 404 o 410 en github.com o www.github.com, porque GitHub responde
+  404 a un repositorio privado sin sesión), a revisar (429, errores 5xx y
+  tiempo agotado), rotos (el resto) e ignorados. Botón «Está bien» por
+  enlace para dejar de vigilarlo, «Volver a vigilar» y «Está bien (todos)»
+  en privados y protegidos; las secciones de privados, protegidos e
+  ignorados van plegadas. Migración 5 (marca por enlace, también incluida
+  en la copia de seguridad JSON; el formato sigue siendo 1).
+
+- Columnas explícitas: en la vista «Todos» cada familia principal con sus
+  subfamilias forma un grupo que se arrastra desde el título de cualquiera
+  de sus bloques a cualquier columna y posición (también al final de una
+  columna o a una columna vacía). La columna queda guardada en el servidor
+  (migración 6, campo por familia principal; también en la copia de
+  seguridad JSON). Ruta `PUT /api/families/layout`. En pantallas táctiles no
+  se puede arrastrar. Las familias que aún no se han colocado se reparten
+  solas en la columna con menos carga.
+
+### Cambiado
+
+- Plegar o desplegar un bloque ya NO mueve ningún bloque de columna: antes
+  el navegador repartía las columnas para equilibrarlas.
+- El comprobador deja de contar como rotos los enlaces protegidos y los
+  404 de GitHub (ahora «posibles privados»), porque en realidad funcionan.
+- Migraciones 4, 5 y 6 de la base de datos, aplicadas solas al arrancar;
+  cambios de esquema compatibles.
+- `GET /api/session` devuelve además `pin`.
+- El reparto automático de familias nuevas ya no equilibra según la altura
+  sino según el número de enlaces.
+
+### Seguridad
+
+- Protecciones del registro de accesos: tras 30 eventos fallidos en una
+  hora se descartan los siguientes fallos (se cuenta cuántos se omiten y
+  se avisa); los eventos correctos y los de bloqueo, altas y bajas de
+  huellas nunca se descartan; máximo 1000 eventos y 180 días, y la purga
+  nunca borra los 100 eventos correctos más recientes. Las peticiones
+  rechazadas por estar bloqueado no se registran una a una. Si falla el
+  registro nunca impide entrar.
+- Modo solo huella: con el PIN desactivado el servidor rechaza cualquier
+  PIN con 403 sin calcular el hash y sin contar como fallo.
+- No se puede borrar la última huella mientras el PIN esté desactivado.
+
 ## [0.4.0] - 2026-10-15
 
 ### Añadido

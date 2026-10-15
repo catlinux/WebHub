@@ -121,6 +121,46 @@ confirmación) y seguir entrando con el PIN.
 (`data/webhub.sqlite`), así que las copias de la base las incluyen. La exportación JSON de
 la web (Administrar › Copia de seguridad) no las incluye.
 
+## Registro de accesos y modo solo huella
+
+El servidor conserva un registro de entradas en la base de datos (`access_log`,
+migración 4): entrada con PIN, entrada con huella, PIN incorrecto, huella no
+válida, bloqueo de entrada, huella añadida y borrada, PIN desactivado y
+reactivado. De cada evento se guarda fecha, tipo, resultado, IP y una etiqueta
+corta del dispositivo (por ejemplo «Chrome en Windows», nunca el texto del
+navegador) y el nombre de la huella cuando procede; nunca se guarda el PIN ni
+cuerpos de peticiones.
+
+**Cómo verlo:** Administrar › Acceso muestra el registro, con resumen del último
+acceso correcto y de los intentos fallidos de las últimas 24 horas. Al entrar,
+si hubo intentos fallidos desde la entrada anterior, aparece un aviso superior
+con «Ver registro». También hay rutas `GET /api/accesos` y
+`GET /api/accesos/resumen` (exigen sesión).
+
+Protecciones para que un atacante no pueda llenarlo ni borrar el rastro: tras 30
+eventos fallidos en una hora se descartan los siguientes fallos (se cuenta
+cuántos se omiten y se avisa); los eventos correctos y los de bloqueo, altas y
+bajas de huellas nunca se descartan; máximo 1000 eventos y 180 días; la purga
+nunca borra los 100 eventos correctos más recientes. Las peticiones rechazadas
+por estar bloqueado no se registran una a una. Si falla el registro nunca
+impide entrar.
+
+**Modo solo huella:** en Administrar › Acceso se puede desactivar la entrada
+con PIN (solo si hay al menos una huella registrada), de modo que no hay nada
+que adivinar: con el PIN desactivado el servidor rechaza cualquier PIN con 403
+sin calcular el hash y sin contar como fallo; la pantalla de entrada solo ofrece
+la huella; no se puede borrar la última huella mientras el PIN esté
+desactivado.
+
+**Recuperación:** si se pierde el acceso por huella (o se quiere recuperar el
+PIN), ejecutar en el servidor:
+
+```sh
+docker compose run --rm webhub npm run pin
+```
+
+Esto cambia el PIN y reactiva la entrada por PIN.
+
 ## 6. Copias de seguridad
 
 - **Desde la web**: Administrar › Copia de seguridad › Descargar copia (JSON). Incluye familias, enlaces,
@@ -141,7 +181,7 @@ docker compose run --rm build
 docker compose restart webhub
 ```
 
-Las migraciones de la base de datos se aplican solas al arrancar. La migración 3 y el cambio de dónde se guarda el aspecto se aplican solos al reiniciar. Para usar un Node más nuevo:
+Las migraciones de la base de datos se aplican solas al arrancar. Las migraciones 4, 5 y 6 (registro de accesos, marca de enlaces ignorados en el comprobador y columna de familias) se aplican solas al reiniciar; antes de actualizar se recomienda hacer una copia de la base de datos. La migración 3 y el cambio de dónde se guarda el aspecto se aplican solos al reiniciar. Para usar un Node más nuevo:
 `docker compose pull && docker compose up -d`.
 
 ## Salida a Internet del servidor
@@ -215,6 +255,16 @@ las anteriores a la conversión a rem, sin diferencias visibles.
 
 **Aspecto y familias plegadas por defecto (0.4.0), no comprobado:** el aspecto en un móvil físico, en
 Safari ni Firefox, y en producción (pendiente de que lo confirme el usuario).
+
+**Registro de accesos, modo solo huella, comprobador y columnas (0.5.0), comprobado:** 238 tests
+automáticos pasan (los de seguridad se verificaron rompiendo el código a propósito: cada comprobación
+rota hace fallar algún test), pruebas de extremo a extremo en Chromium real en este VPS (instancia
+aparte con datos temporales): registro, aviso de intentos fallidos, activar y desactivar el modo solo
+huella con autenticador virtual, comprobador con estados sembrados, y arrastre de grupos entre
+columnas, plegado sin movimiento, reordenación de hermanas y ventana estrecha.
+
+**Registro de accesos, modo solo huella, comprobador y columnas (0.5.0), no comprobado:** nada de esto en
+un móvil físico, Safari ni Firefox, ni en producción (pendiente de que lo confirme el usuario).
 
 **No probado:**
 

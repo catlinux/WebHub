@@ -24,7 +24,9 @@ Uso personal, un solo usuario. Toda la aplicación (también la lista de enlaces
   - crear, editar, borrar y reordenar (arrastrando o con ↑↓) familias y enlaces; mover enlaces entre familias;
   - importar marcadores del navegador (HTML de Chrome, Edge, Firefox…) con vista previa y detección de duplicados;
   - exportar y restaurar todo en JSON;
-  - comprobador de enlaces rotos bajo demanda.
+  - comprobador de enlaces bajo demanda, que los clasifica en bien,
+    protegidos, posibles privados, a revisar, rotos e ignorados, con los
+    botones «Está bien» y «Volver a vigilar».
 
 - **Reordenar bloques** arrastrando desde su título, solo entre familias del mismo
   nivel; en pantallas táctiles se usa ↑↓ en Administrar › Organizar.
@@ -44,6 +46,14 @@ Uso personal, un solo usuario. Toda la aplicación (también la lista de enlaces
   todo. Se guarda en el servidor y vale en todos los dispositivos.
 - **Entrada con huella** mediante passkeys (WebAuthn): huella, cara o Windows
   Hello del dispositivo; el PIN se mantiene como alternativa.
+- **Columnas explícitas en «Todos»**: cada familia principal con sus
+  subfamilias forma un grupo que se arrastra desde el título de cualquiera de
+  sus bloques a cualquier columna y posición; la columna queda guardada en el
+  servidor. En pantallas táctiles no se puede cambiar de columna.
+- **Registro de accesos**: historial de entradas en Administrar › Acceso, con
+  resumen del último acceso correcto y de los intentos fallidos de las últimas
+  24 horas; al entrar aparece un aviso superior si hubo intentos fallidos
+  desde la entrada anterior.
 
 WebHub **no guarda contraseñas ni secretos** de ningún tipo (ver [TODO.md](TODO.md)).
 
@@ -98,6 +108,17 @@ Por variables de entorno:
 - Solo se admiten URLs `http`/`https` (nunca `javascript:` ni `data:`), también al importar.
 - CSP estricta (`script-src 'self'`), sin `innerHTML` con datos del usuario, `X-Frame-Options: DENY` y `Referrer-Policy: no-referrer`.
 - Los registros nunca incluyen cuerpos de petición, cabeceras ni la cookie.
+- **Registro de accesos**: historial de eventos de entrada (con PIN y con
+  huella) sin guardar el PIN ni cuerpos de peticiones, con resumen del último
+  acceso correcto y de los intentos fallidos de las últimas 24 horas y un aviso
+  superior al entrar si los hubo; protegido frente a relleno masivo y borrado
+  del rastro (límites por hora y totales, purga que conserva los últimos 100
+  accesos correctos).
+- **Modo solo huella**: permite desactivar la entrada con PIN (solo si hay al
+  menos una huella registrada) para que no haya nada que adivinar, con el
+  servidor rechazando cualquier PIN con 403 sin comprobarlo; recuperación
+  ejecutando `npm run pin` (en Docker,
+  `docker compose run --rm webhub npm run pin`).
 
 ## Desarrollo
 
