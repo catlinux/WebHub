@@ -449,7 +449,7 @@ function renderBackup(container: HTMLElement, reload: Reload): void {
       'div',
       { class: 'seccion' },
       h('h3', { text: 'Exportar' }),
-      h('p', { class: 'ayuda', text: 'Descarga todas las familias y enlaces (con notas, etiquetas, favoritos y contadores) en un archivo JSON. No incluye la contraseña ni las sesiones.' }),
+      h('p', { class: 'ayuda', text: 'Descarga todas las familias y enlaces (con notas, etiquetas, favoritos y contadores) en un archivo JSON. No incluye el PIN ni las sesiones.' }),
       h('a', { class: 'btn primario', text: 'Descargar copia (JSON)', attrs: { href: '/api/export', download: '' } }),
       h('h3', { text: 'Restaurar' }),
       h('p', { class: 'ayuda', text: 'Restaurar sustituye todo el contenido actual por el de la copia.' }),

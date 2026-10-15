@@ -42,10 +42,18 @@ function showLogin(configured = true): void {
   layout = null;
   window.removeEventListener('hashchange', route);
   root.className = 'login';
-  const input = h('input', { class: 'campo', attrs: { type: 'password', placeholder: 'Contraseña', autocomplete: 'current-password', required: true, 'aria-label': 'Contraseña' } });
+  // type=password oculta las cifras; inputmode=numeric saca el teclado numérico en el móvil.
+  const input = h('input', {
+    class: 'campo pin',
+    attrs: { type: 'password', inputmode: 'numeric', pattern: '[0-9]*', maxlength: 12, placeholder: 'PIN', autocomplete: 'current-password', required: true, 'aria-label': 'PIN' },
+  });
+  input.addEventListener('input', () => {
+    const digits = input.value.replace(/\D/g, '');
+    if (digits !== input.value) input.value = digits;
+  });
   const error = h('div', { class: 'error', attrs: { role: 'alert' } });
   const button = h('button', { class: 'btn primario', text: 'Entrar', attrs: { type: 'submit' } });
-  if (!configured) error.textContent = 'Aún no hay contraseña: créala en el servidor con «npm run password».';
+  if (!configured) error.textContent = 'Aún no hay PIN: créalo en el servidor con «npm run pin».';
   const form = h(
     'form',
     null,
@@ -60,7 +68,7 @@ function showLogin(configured = true): void {
     button.disabled = true;
     error.textContent = '';
     try {
-      await api('POST', '/api/login', { password: input.value });
+      await api('POST', '/api/login', { pin: input.value });
       input.value = '';
       root.className = '';
       await boot();

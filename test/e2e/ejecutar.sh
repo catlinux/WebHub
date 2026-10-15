@@ -6,7 +6,7 @@ set -e
 cd "$(dirname "$0")/../.."
 TMP=$(mktemp -d)
 node scripts/build.ts >/dev/null 2>&1
-printf '%s\n' 'demo-clave-larga-123' | WEBHUB_DATA_DIR="$TMP/data" node --disable-warning=ExperimentalWarning src/server/cli-password.ts >/dev/null
+printf '%s\n' '246810' | WEBHUB_DATA_DIR="$TMP/data" node --disable-warning=ExperimentalWarning src/server/cli-pin.ts >/dev/null
 WEBHUB_DATA_DIR="$TMP/data" WEBHUB_INSECURE_COOKIE=1 WEBHUB_PORT=3100 node --disable-warning=ExperimentalWarning src/server/main.ts >"$TMP/servidor.log" 2>&1 &
 PID=$!
 trap 'kill $PID 2>/dev/null' EXIT

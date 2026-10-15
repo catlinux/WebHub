@@ -254,7 +254,7 @@ export class Repo {
     return { links: createdLinks, families: createdFamilies };
   }
 
-  /** Copia de seguridad completa (sin sesiones, contraseña ni caché de favicons). */
+  /** Copia de seguridad completa (sin sesiones, PIN ni caché de favicons). */
   exportJson(): object {
     const { families, links } = this.snapshot();
     return {

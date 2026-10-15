@@ -17,8 +17,8 @@ Primera versión.
 - Atajos de teclado: `Ctrl+K` o `/`, flechas o `j`/`k`, `Enter`, `f` y `Esc`.
 - Diseño adaptable a móvil (vertical y horizontal) y tablet: barra lateral plegable, panel de administración
   en una columna, tabla del comprobador apilada, botones táctiles más grandes y campos sin zoom en iOS.
-- Inicio de sesión con contraseña (scrypt), cookie `HttpOnly` + `Secure` + `SameSite=Strict`,
-  límite de intentos por IP y global, y protección CSRF.
+- Entrada con PIN de 6 a 12 dígitos, sin usuario ni contraseña (hash scrypt), cookie `HttpOnly` + `Secure` +
+  `SameSite=Strict`, límite de intentos por IP, bloqueo global escalonado (15 min → 24 h) y protección CSRF.
 - Panel de administración: crear, editar, borrar, reordenar (arrastrando o con botones) y mover familias y enlaces;
   etiquetas, notas y favoritos.
 - Importación de marcadores HTML (Chrome, Edge, Firefox) con vista previa, selección de carpetas y detección de duplicados.

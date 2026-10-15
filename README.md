@@ -5,7 +5,8 @@
 Directorio personal de enlaces de **CatLinux**: todos los servicios, redes, webs propias y webs de interés
 ordenados por familias, localizables al instante y en una sola pestaña ligera en lugar de 40 abiertas.
 
-Uso personal, un solo usuario. Toda la aplicación (también la lista de enlaces) exige iniciar sesión.
+Uso personal, un solo usuario. Toda la aplicación (también la lista de enlaces) exige entrar con un **PIN**
+(sin usuario ni contraseña).
 
 ## Funciones
 
@@ -37,7 +38,7 @@ WebHub **no guarda contraseñas ni secretos** de ningún tipo (ver [TODO.md](TOD
 ```sh
 npm ci
 npm run build                  # genera public/app.js
-npm run password               # crea la contraseña (mínimo 12 caracteres)
+npm run pin                    # crea el PIN (de 6 a 12 dígitos)
 WEBHUB_INSECURE_COOKIE=1 npm start   # http://127.0.0.1:3000
 ```
 
@@ -61,10 +62,13 @@ Por variables de entorno:
 
 ## Seguridad
 
-- Contraseña única guardada como hash **scrypt** con sal; se crea o cambia por terminal (`npm run password`),
-  y cambiarla cierra todas las sesiones.
+- Acceso con un **PIN de 6 a 12 dígitos**, guardado como hash **scrypt** con sal; se crea o cambia por terminal
+  (`npm run pin`) y cambiarlo cierra todas las sesiones.
 - Sesión por cookie `HttpOnly`, `Secure` y `SameSite=Strict`; en la base de datos solo se guarda el hash del token.
-- Límite de intentos de login: 5 fallos por IP en 15 minutos y 30 en total (frena ataques repartidos).
+- Límite de intentos pensado para un PIN: 5 fallos por IP en 15 minutos y, además, un **bloqueo global escalonado**:
+  cada 10 fallos seguidos (vengan de las IP que vengan) se bloquea el acceso 15 min, luego 30 min, 1 h… hasta 24 h.
+  Tras un día de ataque solo se admiten unos 10 intentos diarios: probar un millón de PIN llevaría siglos.
+  Si el bloqueo te afecta a ti, reiniciar el servicio lo borra (`sudo systemctl restart webhub`).
 - Protección CSRF: cabecera propia obligatoria en las escrituras y comprobación de `Origin`.
 - Solo se admiten URLs `http`/`https` (nunca `javascript:` ni `data:`), también al importar.
 - CSP estricta (`script-src 'self'`), sin `innerHTML` con datos del usuario, `X-Frame-Options: DENY` y `Referrer-Policy: no-referrer`.

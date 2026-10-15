@@ -13,7 +13,7 @@
     "build": "node scripts/build.ts",
     "start": "node --disable-warning=ExperimentalWarning src/server/main.ts",
     "dev": "node scripts/build.ts && node --disable-warning=ExperimentalWarning --watch src/server/main.ts",
-    "password": "node --disable-warning=ExperimentalWarning src/server/cli-password.ts",
+    "pin": "node --disable-warning=ExperimentalWarning src/server/cli-pin.ts",
     "test": "node --disable-warning=ExperimentalWarning --test test/*.test.ts",
     "typecheck": "tsc -p tsconfig.json"
   },

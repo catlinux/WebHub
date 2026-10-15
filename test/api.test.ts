@@ -5,11 +5,11 @@ import type { AddressInfo } from 'node:net';
 import { readFileSync } from 'node:fs';
 import { openDatabase } from '../src/server/db.ts';
 import { createApp } from '../src/server/app.ts';
-import { setPassword, LoginLimiter } from '../src/server/auth.ts';
+import { setPin, LoginLimiter } from '../src/server/auth.ts';
 import { iconHrefsFromHtml } from '../src/server/favicons.ts';
 import { classify, checkUrl } from '../src/server/checker.ts';
 
-const PASSWORD = 'clave-de-prueba-larga';
+const PIN = '20261015';
 let server: Server;
 let base: string;
 let cookie = '';
@@ -37,8 +37,8 @@ async function call(method: string, path: string, body?: unknown, headers: Recor
 
 before(async () => {
   const db = openDatabase(null);
-  await setPassword(db, PASSWORD);
-  server = createApp({ db, limiter: new LoginLimiter(3, 50, 60_000) }).server;
+  await setPin(db, PIN);
+  server = createApp({ db, limiter: new LoginLimiter({ maxPerIp: 3, windowMs: 60_000 }) }).server;
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 });
@@ -60,17 +60,30 @@ test('la página se sirve con cabeceras de seguridad', async () => {
   assert.equal(traversal.status, 404);
 });
 
-test('login: rechaza sin cabecera anti-CSRF y con Origin ajeno', async () => {
-  assert.equal((await call('POST', '/api/login', { password: PASSWORD }, { 'X-WebHub': '' })).status, 403);
-  assert.equal((await call('POST', '/api/login', { password: PASSWORD }, { Origin: 'https://malo.example' })).status, 403);
+test('login: rechaza un PIN que no son dígitos sin compararlo', async () => {
+  const db = openDatabase(null);
+  await setPin(db, PIN);
+  const { server: s3 } = createApp({ db });
+  await new Promise<void>((r) => s3.listen(0, '127.0.0.1', r));
+  const url = `http://127.0.0.1:${(s3.address() as AddressInfo).port}`;
+  for (const pin of ['abc', '', '1'.repeat(13)]) {
+    const res = await fetch(`${url}/api/login`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-WebHub': '1' }, body: JSON.stringify({ pin }) });
+    assert.equal(res.status, 401, pin);
+  }
+  s3.close();
 });
 
-test('login: contraseña incorrecta da 401 y al tercer fallo 429', async () => {
+test('login: rechaza sin cabecera anti-CSRF y con Origin ajeno', async () => {
+  assert.equal((await call('POST', '/api/login', { pin: PIN }, { 'X-WebHub': '' })).status, 403);
+  assert.equal((await call('POST', '/api/login', { pin: PIN }, { Origin: 'https://malo.example' })).status, 403);
+});
+
+test('login: PIN incorrecto da 401 y al tercer fallo 429', async () => {
   const ip = { 'X-Forwarded-For': '9.9.9.9' }; // ignorada: trustProxy está desactivado
-  assert.equal((await call('POST', '/api/login', { password: 'mal' }, ip)).status, 401);
-  assert.equal((await call('POST', '/api/login', { password: 'mal' })).status, 401);
-  assert.equal((await call('POST', '/api/login', { password: 'mal' })).status, 401);
-  const blocked = await call('POST', '/api/login', { password: PASSWORD });
+  assert.equal((await call('POST', '/api/login', { pin: '000000' }, ip)).status, 401);
+  assert.equal((await call('POST', '/api/login', { pin: '000000' })).status, 401);
+  assert.equal((await call('POST', '/api/login', { pin: '000000' })).status, 401);
+  const blocked = await call('POST', '/api/login', { pin: PIN });
   assert.equal(blocked.status, 429);
   assert.ok(Number(blocked.headers.get('retry-after')) > 0);
 });
@@ -78,14 +91,14 @@ test('login: contraseña incorrecta da 401 y al tercer fallo 429', async () => {
 test('login correcto: cookie httpOnly, Secure y SameSite', async () => {
   // Servidor aparte para no arrastrar el bloqueo del test anterior.
   const db = openDatabase(null);
-  await setPassword(db, PASSWORD);
+  await setPin(db, PIN);
   const { server: s2 } = createApp({ db });
   await new Promise<void>((r) => s2.listen(0, '127.0.0.1', r));
   const url = `http://127.0.0.1:${(s2.address() as AddressInfo).port}`;
   const res = await fetch(`${url}/api/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-WebHub': '1' },
-    body: JSON.stringify({ password: PASSWORD }),
+    body: JSON.stringify({ pin: PIN }),
   });
   s2.close();
   assert.equal(res.status, 200);
@@ -99,12 +112,12 @@ test('login correcto: cookie httpOnly, Secure y SameSite', async () => {
 test('flujo completo autenticado', async (t) => {
   // Inicia sesión en un servidor nuevo (el principal quedó bloqueado a propósito).
   const db = openDatabase(null);
-  await setPassword(db, PASSWORD);
+  await setPin(db, PIN);
   server.close();
   server = createApp({ db, insecureCookie: true }).server;
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-  const login = await call('POST', '/api/login', { password: PASSWORD });
+  const login = await call('POST', '/api/login', { pin: PIN });
   assert.equal(login.status, 200);
   cookie = (login.headers.get('set-cookie') ?? '').split(';')[0]!;
   assert.doesNotMatch(login.headers.get('set-cookie')!, /Secure/);

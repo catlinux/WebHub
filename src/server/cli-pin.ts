@@ -1,18 +1,18 @@
 /**
- * Crea o cambia la contraseña del administrador. Se pide por terminal sin eco.
- * Uso: npm run password
+ * Crea o cambia el PIN de acceso. Se pide por terminal sin eco.
+ * Uso: npm run pin
  * Cambiarla cierra todas las sesiones abiertas.
  */
 import { config } from './config.ts';
 import { openDatabase } from './db.ts';
-import { setPassword, MIN_PASSWORD_LENGTH } from './auth.ts';
+import { setPin, PIN_MIN, PIN_MAX } from './auth.ts';
 
 function ask(prompt: string): Promise<string> {
   return new Promise((resolve) => {
     const stdin = process.stdin;
     process.stdout.write(prompt);
     if (!stdin.isTTY) {
-      // Permite: printf '%s\n' "$CLAVE" | npm run password (útil en scripts).
+      // Permite: printf '%s\n' "$PIN" | npm run pin (útil en scripts).
       let buf = '';
       stdin.setEncoding('utf8');
       stdin.on('data', (d) => (buf += d));
@@ -44,15 +44,15 @@ function ask(prompt: string): Promise<string> {
 }
 
 const db = openDatabase(config.dataDir);
-const first = await ask(`Nueva contraseña (mínimo ${MIN_PASSWORD_LENGTH} caracteres): `);
-const second = process.stdin.isTTY ? await ask('Repítela: ') : first;
+const first = await ask(`Nuevo PIN (${PIN_MIN} a ${PIN_MAX} dígitos): `);
+const second = process.stdin.isTTY ? await ask('Repítelo: ') : first;
 if (first !== second) {
   console.error('No coinciden. No se ha cambiado nada.');
   process.exit(1);
 }
 try {
-  await setPassword(db, first);
-  console.log(`Contraseña guardada en ${config.dataDir}. Se han cerrado todas las sesiones.`);
+  await setPin(db, first.trim());
+  console.log(`PIN guardado en ${config.dataDir}. Se han cerrado todas las sesiones.`);
 } catch (err) {
   console.error((err as Error).message);
   process.exit(1);

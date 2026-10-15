@@ -4,7 +4,7 @@ const { chromium } = require('playwright');
 const path = require('path');
 const OUT = process.argv[2];
 const BASE = process.env.WEBHUB_URL ?? 'http://127.0.0.1:3100';
-const PASSWORD = process.env.WEBHUB_PASSWORD ?? 'demo-clave-larga-123';
+const PIN = process.env.WEBHUB_PIN ?? '246810';
 const DEMO = path.join(__dirname, 'demo-marcadores.html');
 require('fs').mkdirSync(`${OUT}/capturas`, { recursive: true });
 const shot = (page, name) => page.screenshot({ path: `${OUT}/capturas/${name}.png` });
@@ -21,12 +21,13 @@ const ok = (cond, msg) => { if (!cond) throw new Error('FALLO: ' + msg); console
 
   await page.goto(BASE + '/');
   await page.waitForSelector('.login input[type=password]');
-  await page.fill('.login input', 'incorrecta');
+  ok(await page.getAttribute('.login input', 'inputmode') === 'numeric', 'el campo de PIN pide teclado numérico');
+  await page.fill('.login input', '111111');
   await page.click('.login button');
-  await page.waitForSelector('.login .error:has-text("incorrecta")');
-  ok(true, 'contraseña incorrecta muestra error');
+  await page.waitForSelector('.login .error:has-text("incorrecto")');
+  ok(true, 'PIN incorrecto muestra error');
   await shot(page, '01-login');
-  await page.fill('.login input', PASSWORD);
+  await page.fill('.login input', PIN);
   await page.click('.login button');
   await page.waitForSelector('.layout');
   ok(await page.isVisible('text=Todavía no hay enlaces'), 'estado vacío tras login');

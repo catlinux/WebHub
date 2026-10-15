@@ -33,14 +33,18 @@ sudo -u webhub npm run build
 sudo -u webhub npm prune --omit=dev   # opcional: en ejecución no hace falta ninguna dependencia
 ```
 
-## 3. Contraseña
+## 3. PIN
 
 ```sh
-sudo -u webhub env WEBHUB_DATA_DIR=/var/lib/webhub npm run password
+sudo -u webhub env WEBHUB_DATA_DIR=/var/lib/webhub npm run pin
 ```
 
-Pide la contraseña dos veces sin mostrarla (mínimo 12 caracteres). Solo se guarda su hash scrypt.
-Para cambiarla más adelante se repite el mismo comando (cierra todas las sesiones).
+Pide el PIN dos veces sin mostrarlo (de 6 a 12 dígitos; cuantos más, mejor). Solo se guarda su hash scrypt.
+Para cambiarlo más adelante se repite el mismo comando (cierra todas las sesiones).
+
+Si alguien intenta adivinar el PIN, el acceso se bloquea para todos de forma escalonada (de 15 min a 24 h) y en
+`journalctl -u webhub` aparece «Login bloqueado N min…». Si te bloquea a ti, `sudo systemctl restart webhub` lo
+desbloquea (el contador está en memoria).
 
 ## 4. Servicio systemd
 
@@ -76,7 +80,7 @@ Capa extra opcional: restringir el acceso por IP o VPN en Caddy (comentado en el
 Dos opciones complementarias:
 
 - **Desde la web**: Administrar › Copia de seguridad › Descargar copia (JSON). Incluye familias, enlaces,
-  notas, etiquetas, favoritos y contadores; no incluye la contraseña ni las sesiones.
+  notas, etiquetas, favoritos y contadores; no incluye el PIN ni las sesiones.
 - **En el servidor**: la base de datos está en `/var/lib/webhub/webhub.sqlite` (modo WAL). No la copies
   con `cp` en caliente; usa la copia en línea de SQLite (requiere el paquete `sqlite3`):
 
@@ -108,13 +112,13 @@ o la filtra, verás iniciales en lugar de favicons y el comprobador avisará de 
 **Probado** (contenedor Linux, Node 22.22.0):
 
 - Tests automáticos (`npm test`): importador de marcadores (formato de Chrome y Firefox con archivos de ejemplo
-  escritos a mano), orden, búsqueda, validación de URLs, hash de contraseña, sesiones, límite de intentos
+  escritos a mano), orden, búsqueda, validación de URLs, hash del PIN, sesiones, límite de intentos y bloqueo escalonado
   y la API completa (login, CSRF, CRUD, reordenar, mover, importar, exportar/restaurar, borrado en cascada).
 - Interfaz en **Chromium real** (Playwright) con capturas, en escritorio (1440×900) y móvil emulado (390×844):
   login, importación con vista previa, vistas, búsqueda con teclado, apertura en pestaña nueva, favoritos,
   arrastrar para reordenar y mover, formularios, copia de seguridad, comprobador y cierre de sesión.
 - Comprobador de enlaces contra un servidor HTTP local (200, 404, HEAD no admitido, conexión rechazada).
-- `npm run password` sin terminal (por tubería).
+- `npm run pin` sin terminal (por tubería).
 
 **No probado:**
 
@@ -125,4 +129,4 @@ o la filtra, verás iniciales en lugar de favicons y el comprobador avisará de 
   (solo se cargaron algunos favicons, como el de GitHub).
 - Exportaciones reales de tu navegador (solo archivos de ejemplo con el mismo formato).
 - Firefox, Safari y dispositivos móviles físicos.
-- `npm run password` en una terminal interactiva real.
+- `npm run pin` en una terminal interactiva real.

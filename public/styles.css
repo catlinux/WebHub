@@ -74,6 +74,8 @@ label.etiqueta { display: block; margin: .6rem 0 .2rem; color: var(--muted); fon
 .login h1 { margin: .4rem 0 1.4rem; font-size: 22px; letter-spacing: .04em; }
 .login .campo { height: 38px; margin-bottom: .7rem; text-align: center; }
 .login .btn { width: 100%; height: 38px; justify-content: center; }
+.login .campo.pin { height: 48px; font-size: 24px; letter-spacing: .45em; text-indent: .45em; font-variant-numeric: tabular-nums; }
+.login .campo.pin::placeholder { font-size: 15px; letter-spacing: .2em; }
 .login .error { min-height: 1.4em; color: var(--danger); margin-top: .7rem; }
 
 /* ---------- Estructura ---------- */

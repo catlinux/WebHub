@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import type { DatabaseSync } from 'node:sqlite';
 import { Router, HttpError, sendJson, readJson, parseCookies, clientIp, idParam, type Ctx } from './http.ts';
 import { Repo, InputError } from './repo.ts';
-import { LoginLimiter, createSession, deleteSession, getPasswordHash, isValidSession, verifyPassword } from './auth.ts';
+import { LoginLimiter, PIN_MAX, createSession, deleteSession, getPinHash, isValidSession, verifySecret } from './auth.ts';
 import { LinkChecker } from './checker.ts';
 import { getFavicon } from './favicons.ts';
 import { parseBookmarksHtml, planImport } from '../shared/bookmarks.ts';
@@ -63,7 +63,7 @@ export function createApp(opts: AppOptions): { server: Server; repo: Repo } {
   const api = new Router();
 
   api.on('GET', '/api/session', ({ req, res }) => {
-    sendJson(res, 200, { authenticated: authed(req), configured: getPasswordHash(db) !== null });
+    sendJson(res, 200, { authenticated: authed(req), configured: getPinHash(db) !== null });
   });
 
   api.on('POST', '/api/login', async ({ req, res, ip }) => {
@@ -72,12 +72,14 @@ export function createApp(opts: AppOptions): { server: Server; repo: Repo } {
       throw new HttpError(429, `Demasiados intentos. Prueba de nuevo en ${Math.ceil(wait / 60)} min.`, { 'Retry-After': String(wait) });
     }
     const body = await readJson(req, 4096);
-    const hash = getPasswordHash(db);
-    if (!hash) throw new HttpError(503, 'Aún no hay contraseña. Créala en el servidor con «npm run password».');
-    const password = typeof body.password === 'string' ? body.password : '';
-    if (!password || password.length > 1024 || !(await verifyPassword(password, hash))) {
-      limiter.fail(ip);
-      throw new HttpError(401, 'Contraseña incorrecta.');
+    const hash = getPinHash(db);
+    if (!hash) throw new HttpError(503, 'Aún no hay PIN. Créalo en el servidor con «npm run pin».');
+    const pin = typeof body.pin === 'string' ? body.pin : '';
+    if (!/^\d+$/.test(pin) || pin.length > PIN_MAX || !(await verifySecret(pin, hash))) {
+      const lock = limiter.fail(ip);
+      // Aviso visible en journalctl (nunca se registra el PIN).
+      if (lock) console.warn(`Login bloqueado ${Math.round(lock / 60_000)} min tras varios PIN incorrectos seguidos.`);
+      throw new HttpError(401, 'PIN incorrecto.');
     }
     limiter.succeed(ip);
     const session = createSession(db, sessionDays);
@@ -230,7 +232,7 @@ export function createApp(opts: AppOptions): { server: Server; repo: Repo } {
       } else if (err instanceof InputError) {
         sendJson(res, 400, { error: err.message });
       } else {
-        // No se registran cuerpos ni cabeceras: pueden contener la contraseña o la cookie.
+        // No se registran cuerpos ni cabeceras: pueden contener el PIN o la cookie.
         console.error(`Error en ${method} ${url.pathname}:`, (err as Error)?.message ?? err);
         sendJson(res, 500, { error: 'Error interno.' });
       }

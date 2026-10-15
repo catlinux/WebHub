@@ -10,13 +10,13 @@ function scryptAsync(password: string, salt: Buffer, N: number, r: number, p: nu
 }
 
 /** Devuelve «scrypt$N$r$p$sal$hash» (sal y hash en base64). */
-export async function hashPassword(password: string): Promise<string> {
+export async function hashSecret(password: string): Promise<string> {
   const salt = randomBytes(16);
   const key = await scryptAsync(password, salt, SCRYPT.N, SCRYPT.r, SCRYPT.p, SCRYPT.keylen);
   return ['scrypt', SCRYPT.N, SCRYPT.r, SCRYPT.p, salt.toString('base64'), key.toString('base64')].join('$');
 }
 
-export async function verifyPassword(password: string, stored: string): Promise<boolean> {
+export async function verifySecret(password: string, stored: string): Promise<boolean> {
   const parts = stored.split('$');
   if (parts.length !== 6 || parts[0] !== 'scrypt') return false;
   const [, n, r, p, saltB64, keyB64] = parts as [string, string, string, string, string, string];
@@ -25,18 +25,22 @@ export async function verifyPassword(password: string, stored: string): Promise<
   return key.length === expected.length && timingSafeEqual(key, expected);
 }
 
-export const MIN_PASSWORD_LENGTH = 12;
+/** El PIN son solo dígitos: de 6 a 12. Con 6 cifras hay un millón de combinaciones; el bloqueo escalonado de
+ * LoginLimiter hace inviable probarlas por la web. */
+export const PIN_MIN = 6;
+export const PIN_MAX = 12;
+export const PIN_PATTERN = new RegExp(`^\\d{${PIN_MIN},${PIN_MAX}}$`);
 
-export function getPasswordHash(db: DatabaseSync): string | null {
-  const row = db.prepare("SELECT value FROM settings WHERE key = 'password_hash'").get() as { value: string } | undefined;
+export function getPinHash(db: DatabaseSync): string | null {
+  const row = db.prepare("SELECT value FROM settings WHERE key = 'pin_hash'").get() as { value: string } | undefined;
   return row?.value ?? null;
 }
 
-export async function setPassword(db: DatabaseSync, password: string): Promise<void> {
-  if (password.length < MIN_PASSWORD_LENGTH) throw new Error(`La contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres.`);
-  const hash = await hashPassword(password);
-  db.prepare("INSERT INTO settings (key, value) VALUES ('password_hash', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(hash);
-  // Cambiar la contraseña cierra todas las sesiones.
+export async function setPin(db: DatabaseSync, pin: string): Promise<void> {
+  if (!PIN_PATTERN.test(pin)) throw new Error(`El PIN debe tener de ${PIN_MIN} a ${PIN_MAX} dígitos (solo números).`);
+  const hash = await hashSecret(pin);
+  db.prepare("INSERT INTO settings (key, value) VALUES ('pin_hash', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(hash);
+  // Cambiar el PIN cierra todas las sesiones.
   db.prepare('DELETE FROM sessions').run();
 }
 
@@ -68,23 +72,33 @@ export function deleteSession(db: DatabaseSync, token: string | undefined): void
 }
 
 /**
- * Límite de intentos de login fallidos: por IP y global (para frenar
- * también ataques repartidos entre muchas IP). Ventana deslizante en memoria.
+ * Límite de intentos de login fallidos, pensado para un PIN numérico:
+ * - por IP: como mucho `maxPerIp` fallos en la ventana deslizante;
+ * - global (todas las IP juntas): cada `streakLimit` fallos seguidos sin un acierto bloquean el login
+ *   para todos durante `baseLockMs`, y cada nuevo bloqueo dura el doble, hasta `maxLockMs`.
+ * Con los valores por defecto, tras un día de ataque solo se admiten unos 10 intentos cada 24 h.
+ * El estado está en memoria: reiniciar el servicio lo borra (así el dueño puede desbloquearse).
  */
 export class LoginLimiter {
   private readonly perIp = new Map<string, number[]>();
-  private global: number[] = [];
-
+  private streak = 0;
+  private lockedUntil = 0;
   private readonly maxPerIp: number;
-  private readonly maxGlobal: number;
   private readonly windowMs: number;
+  private readonly streakLimit: number;
+  private readonly baseLockMs: number;
+  private readonly maxLockMs: number;
   private readonly clock: () => number;
 
-  constructor(maxPerIp = 5, maxGlobal = 30, windowMs = 15 * 60_000, clock: () => number = Date.now) {
-    this.maxPerIp = maxPerIp;
-    this.maxGlobal = maxGlobal;
-    this.windowMs = windowMs;
-    this.clock = clock;
+  constructor(
+    opts: { maxPerIp?: number; windowMs?: number; streakLimit?: number; baseLockMs?: number; maxLockMs?: number; clock?: () => number } = {},
+  ) {
+    this.maxPerIp = opts.maxPerIp ?? 5;
+    this.windowMs = opts.windowMs ?? 15 * 60_000;
+    this.streakLimit = opts.streakLimit ?? 10;
+    this.baseLockMs = opts.baseLockMs ?? 15 * 60_000;
+    this.maxLockMs = opts.maxLockMs ?? 24 * 3600_000;
+    this.clock = opts.clock ?? Date.now;
   }
 
   private recent(list: number[]): number[] {
@@ -94,26 +108,31 @@ export class LoginLimiter {
 
   /** Segundos que faltan para poder intentarlo de nuevo; 0 si está permitido. */
   retryAfter(ip: string): number {
+    const now = this.clock();
+    let until = this.lockedUntil;
     const mine = this.recent(this.perIp.get(ip) ?? []);
-    this.global = this.recent(this.global);
-    const blockers: number[] = [];
-    if (mine.length >= this.maxPerIp) blockers.push(mine[mine.length - this.maxPerIp] as number);
-    if (this.global.length >= this.maxGlobal) blockers.push(this.global[this.global.length - this.maxGlobal] as number);
-    if (blockers.length === 0) return 0;
-    const until = Math.max(...blockers) + this.windowMs;
-    return Math.max(1, Math.ceil((until - this.clock()) / 1000));
+    if (mine.length >= this.maxPerIp) until = Math.max(until, (mine[mine.length - this.maxPerIp] as number) + this.windowMs);
+    return until > now ? Math.ceil((until - now) / 1000) : 0;
   }
 
-  fail(ip: string): void {
+  /** Registra un fallo. Devuelve los ms de bloqueo global si este fallo lo ha activado. */
+  fail(ip: string): number {
     const now = this.clock();
     const mine = this.recent(this.perIp.get(ip) ?? []);
     mine.push(now);
     this.perIp.set(ip, mine);
-    this.global.push(now);
     if (this.perIp.size > 10_000) this.perIp.clear();
+    this.streak++;
+    if (this.streak % this.streakLimit !== 0) return 0;
+    const round = this.streak / this.streakLimit;
+    const lock = Math.min(this.baseLockMs * 2 ** (round - 1), this.maxLockMs);
+    this.lockedUntil = now + lock;
+    return lock;
   }
 
   succeed(ip: string): void {
     this.perIp.delete(ip);
+    this.streak = 0;
+    this.lockedUntil = 0;
   }
 }
