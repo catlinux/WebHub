@@ -1,7 +1,7 @@
 # Despliegue en el VPS (Docker + Apache + Certbot)
 
 Guía para instalar WebHub en un VPS Linux con Docker, detrás de Apache sirviendo HTTPS con Certbot.
-Es la instalación real de `webhub.invierteconcriterio.es`: código en `/opt/contabo-apps/webhub`,
+Es la instalación usada en producción (aquí con el dominio de ejemplo `webhub.ejemplo.com`): código en `/opt/contabo-apps/webhub`,
 usuario `sysmarc` (uid 1001), Debian 13. Al final hay alternativas sin Docker (systemd) y con Caddy.
 
 ## Por qué Docker
@@ -32,7 +32,7 @@ La base de datos va en `data/webhub.sqlite` (está en `.gitignore`, así que `gi
 Revisa [docker-compose.yml](../docker-compose.yml):
 
 - `user`: uid:gid del dueño del directorio (`id -u`, `id -g`); así los archivos de `data/` son suyos.
-- `WEBHUB_PUBLIC_ORIGIN`: tu dominio con `https://`.
+- `WEBHUB_PUBLIC_ORIGIN`: tu dominio con `https://`. Va en el archivo `.env` (cópialo de `.env.ejemplo`; `.env` no se sube a Git), no en el compose.
 - El puerto se publica solo en `127.0.0.1:3000`. Si está ocupado (`ss -ltnp`), cambia el de la izquierda.
 - `WEBHUB_TRUST_PROXY=1`: el límite de intentos usa la última IP de `X-Forwarded-For`, la que añade Apache.
   Si delante de Apache hubiera otro proxy (p. ej. Cloudflare), esa IP sería la del proxy: habría que
@@ -65,9 +65,9 @@ Hacen falta los módulos `proxy`, `proxy_http`, `headers`, `ssl` y `rewrite`
 [apache.conf.ejemplo](apache.conf.ejemplo):
 
 ```sh
-sed 's/webhub\.ejemplo\.com/webhub.invierteconcriterio.es/g' docs/apache.conf.ejemplo \
-  | sudo tee /etc/apache2/sites-available/webhub.invierteconcriterio.es.conf
-sudo a2ensite webhub.invierteconcriterio.es.conf
+sed 's/webhub\.ejemplo\.com/TU-DOMINIO/g' docs/apache.conf.ejemplo \
+  | sudo tee /etc/apache2/sites-available/TU-DOMINIO.conf
+sudo a2ensite TU-DOMINIO.conf
 sudo apache2ctl configtest      # recargar solo si da «Syntax OK»
 sudo systemctl reload apache2
 ```
@@ -78,7 +78,7 @@ de cabeceras; Apache solo añade HSTS.
 ## 5. HTTPS con Certbot
 
 ```sh
-sudo certbot --apache -d webhub.invierteconcriterio.es --redirect
+sudo certbot --apache -d TU-DOMINIO --redirect
 sudo certbot renew --dry-run
 ```
 
@@ -88,7 +88,7 @@ La renovación la hace el temporizador `certbot.timer`.
 Comprobación:
 
 ```sh
-curl -I https://webhub.invierteconcriterio.es   # 200, Strict-Transport-Security, Content-Security-Policy…
+curl -I https://TU-DOMINIO   # 200, Strict-Transport-Security, Content-Security-Policy…
 ```
 
 ## Entrada con huella
@@ -98,7 +98,7 @@ Windows Hello del dispositivo. El PIN se mantiene como alternativa y para dar de
 cada dispositivo nuevo.
 
 **Requisitos:** HTTPS y `WEBHUB_PUBLIC_ORIGIN` definido con el origen exacto (p. ej.
-`https://webhub.invierteconcriterio.es`). WebAuthn exige HTTPS (o `localhost`) y las
+`https://webhub.ejemplo.com`). WebAuthn exige HTTPS (o `localhost`) y las
 huellas quedan atadas al dominio (rpId = host de `WEBHUB_PUBLIC_ORIGIN`). Si
 `WEBHUB_PUBLIC_ORIGIN` no está definido, el origen se deduce de la cabecera `Host` (solo
 desarrollo); en producción debe definirse.
@@ -170,9 +170,8 @@ protección real es el PIN o la huella. El nombre del dominio puede
 descubrirse por otras vías: los registros públicos de certificados de Let's
 Encrypt publican cada nombre de dominio con certificado (un certificado
 comodín los oculta) y, si el repositorio es público, los nombres de dominio que
-aparecen en la guía y en `docker-compose.yml` también. Si no quieres que se
-descubra, sustitúyelo por un dominio de ejemplo en esos archivos. En cualquier caso, nunca se suben
-enlaces ni datos reales: `data/` y las copias de la base de datos están en `.gitignore`.
+aparecen en la guía también: por eso el dominio real va solo en el archivo `.env`, que no se sube.
+En cualquier caso, nunca se suben enlaces ni datos reales: `data/` y las copias de la base de datos están en `.gitignore`.
 
 Comprobación: `curl -sI https://tu-dominio/ | grep -i x-robots` y
 `curl https://tu-dominio/robots.txt`.
