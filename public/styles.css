@@ -249,6 +249,26 @@ dialog .error { color: var(--danger); min-height: 1.2em; margin-top: .5rem; font
 }
 .aviso-flotante.error { border-color: var(--danger); }
 
+.aviso-huella {
+  position: fixed; left: 50%; bottom: 1.2rem; transform: translateX(-50%);
+  max-width: calc(100% - 2rem); padding: .7rem .9rem;
+  background: var(--panel-2); border: 1px solid var(--accent-dim); border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .5); z-index: 50;
+  display: flex; flex-direction: column; gap: .5rem; align-items: center;
+  padding-bottom: calc(.7rem + env(safe-area-inset-bottom, 0px));
+}
+.aviso-huella span { font-size: 13px; }
+.aviso-huella > div { display: flex; gap: .5rem; }
+@media (max-width: 480px) { .aviso-huella { width: calc(100% - 2rem); } }
+
+.login .separador {
+  display: flex; align-items: center; gap: .6rem;
+  color: var(--faint); font-size: 12.5px; margin: .4rem 0;
+}
+.login .separador::before, .login .separador::after {
+  content: ''; flex: 1; height: 1px; background: var(--line);
+}
+
 /* ---------- Administración ---------- */
 .pestanas { display: flex; gap: .2rem; padding: 0 1rem; border-bottom: 1px solid var(--line); overflow-x: auto; }
 .pestanas a {

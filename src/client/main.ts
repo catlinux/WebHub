@@ -8,6 +8,7 @@ import { searchLinks } from '../shared/search.ts';
 import { linkDialog, familyDialog } from './dialogs.ts';
 import { renderAdmin } from './admin.ts';
 import { aplicarAspecto } from './aspecto.ts';
+import { passkeysSupported, platformAvailable, loginWithPasskey, deviceHasPasskey, registerPasskey, defaultDeviceName, dismissPasskeyOffer, passkeyOfferDismissed } from './passkeys.ts';
 import { attachTooltips, hideTooltip } from './tooltip.ts';
 import { dropReorder } from '../shared/order.ts';
 import type { Family, Link, Snapshot } from '../shared/types.ts';
@@ -19,8 +20,8 @@ const root = document.getElementById('app') as HTMLElement;
 async function boot(): Promise<void> {
   setUnauthorizedHandler(() => showLogin());
   try {
-    const session = await api<{ authenticated: boolean; configured: boolean }>('GET', '/api/session');
-    if (!session.authenticated) return showLogin(session.configured);
+    const session = await api<{ authenticated: boolean; configured: boolean; passkeys: boolean }>('GET', '/api/session');
+    if (!session.authenticated) return showLogin({ configured: session.configured, passkeys: session.passkeys, auto: true });
     await reload();
     buildLayout();
     route();
@@ -41,7 +42,10 @@ export async function reload(): Promise<void> {
 
 // ---------------------------------------------------------------- login
 
-function showLogin(configured = true): void {
+async function showLogin(opts: { configured?: boolean; passkeys?: boolean; auto?: boolean } = {}): Promise<void> {
+  const configured = opts.configured ?? true;
+  const passkeys = opts.passkeys ?? false;
+  const auto = opts.auto ?? false;
   layout = null;
   window.removeEventListener('hashchange', route);
   root.className = 'login';
@@ -57,11 +61,32 @@ function showLogin(configured = true): void {
   const error = h('div', { class: 'error', attrs: { role: 'alert' } });
   const button = h('button', { class: 'btn primario', text: 'Entrar', attrs: { type: 'submit' } });
   if (!configured) error.textContent = 'Aún no hay PIN: créalo en el servidor con «npm run pin».';
+  const compatible = passkeys && passkeysSupported() && (await platformAvailable());
+  let huellaBtn: HTMLButtonElement | null = null;
+  let separador: HTMLElement | null = null;
+  if (compatible) {
+    huellaBtn = h('button', { class: 'btn primario', text: 'Entrar con huella', attrs: { type: 'button' } });
+    separador = h('div', { class: 'separador', text: 'o con el PIN' });
+    huellaBtn.addEventListener('click', async () => {
+      huellaBtn!.disabled = true;
+      error.textContent = '';
+      try {
+        await loginWithPasskey();
+        root.className = '';
+        await boot();
+      } catch (err) {
+        error.textContent = (err as Error).message;
+        huellaBtn!.disabled = false;
+      }
+    });
+  }
   const form = h(
     'form',
     null,
     h('img', { attrs: { src: '/logo.png', alt: '' } }),
     h('h1', { text: 'WebHub' }),
+    huellaBtn,
+    separador,
     input,
     button,
     error,
@@ -75,6 +100,9 @@ function showLogin(configured = true): void {
       input.value = '';
       root.className = '';
       await boot();
+      if (passkeysSupported() && (await platformAvailable()) && !deviceHasPasskey() && !passkeyOfferDismissed()) {
+        mostrarAvisoHuella();
+      }
     } catch (err) {
       error.textContent = (err as Error).message;
       input.select();
@@ -84,6 +112,52 @@ function showLogin(configured = true): void {
   });
   clear(root, form);
   input.focus();
+
+  if (auto && compatible && deviceHasPasskey() && window.matchMedia('(pointer: coarse)').matches) {
+    if (!arranqueHuellaDisparado) {
+      arranqueHuellaDisparado = true;
+      void (async () => {
+        try {
+          await loginWithPasskey();
+          root.className = '';
+          await boot();
+        } catch {
+          /* sin error */
+        }
+      })();
+    }
+  }
+}
+
+let arranqueHuellaDisparado = false;
+
+function mostrarAvisoHuella(): void {
+  document.querySelector('.aviso-huella')?.remove();
+  const activar = h('button', { class: 'btn primario', text: 'Activar', attrs: { type: 'button' } });
+  const ahora = h('button', { class: 'btn', text: 'Ahora no', attrs: { type: 'button' } });
+  const aviso = h(
+    'div',
+    { class: 'aviso-huella', attrs: { role: 'region', 'aria-label': '¿Entrar con huella en este dispositivo?' } },
+    h('span', { text: '¿Entrar con huella en este dispositivo?' }),
+    h('div', null, activar, ' ', ahora),
+  );
+  activar.addEventListener('click', async () => {
+    activar.disabled = true;
+    try {
+      await registerPasskey(defaultDeviceName());
+      aviso.remove();
+      toast('Huella activada.');
+    } catch (err) {
+      toast((err as Error).message, true);
+    } finally {
+      activar.disabled = false;
+    }
+  });
+  ahora.addEventListener('click', () => {
+    dismissPasskeyOffer();
+    aviso.remove();
+  });
+  document.body.append(aviso);
 }
 
 // ---------------------------------------------------------------- estructura
