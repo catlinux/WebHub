@@ -43,9 +43,27 @@ export async function reload(): Promise<void> {
 // ---------------------------------------------------------------- login
 
 async function showLogin(opts: { configured?: boolean; passkeys?: boolean; auto?: boolean } = {}): Promise<void> {
-  const configured = opts.configured ?? true;
-  const passkeys = opts.passkeys ?? false;
   const auto = opts.auto ?? false;
+  let configured: boolean;
+  let passkeys: boolean;
+  if (opts.passkeys === undefined) {
+    // Esta ruta es pública y responde 200; aun así se evita que un 401 hipotético
+    // vuelva a disparar el manejador de sesión caducada (y por tanto showLogin).
+    setUnauthorizedHandler(() => {});
+    try {
+      const session = await api<{ authenticated: boolean; configured: boolean; passkeys: boolean }>('GET', '/api/session');
+      configured = session.configured;
+      passkeys = session.passkeys;
+    } catch {
+      configured = true;
+      passkeys = false;
+    } finally {
+      setUnauthorizedHandler(() => showLogin());
+    }
+  } else {
+    configured = opts.configured ?? true;
+    passkeys = opts.passkeys;
+  }
   layout = null;
   window.removeEventListener('hashchange', route);
   root.className = 'login';
