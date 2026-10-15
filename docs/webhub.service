@@ -6,14 +6,14 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=webhub
-Group=webhub
-WorkingDirectory=/opt/webhub
+User=sysmarc
+Group=sysmarc
+WorkingDirectory=/opt/contabo-apps/webhub
 ExecStart=/usr/bin/node --disable-warning=ExperimentalWarning src/server/main.ts
 Environment=NODE_ENV=production
 Environment=WEBHUB_HOST=127.0.0.1
 Environment=WEBHUB_PORT=3000
-Environment=WEBHUB_DATA_DIR=/var/lib/webhub
+Environment=WEBHUB_DATA_DIR=/opt/contabo-apps/webhub/data
 Environment=WEBHUB_TRUST_PROXY=1
 Environment=WEBHUB_PUBLIC_ORIGIN=https://webhub.ejemplo.com
 Restart=on-failure
@@ -22,10 +22,11 @@ RestartSec=3
 # Endurecimiento
 NoNewPrivileges=true
 ProtectSystem=strict
+# Si Node está instalado con nvm en /home/sysmarc, cambia a ProtectHome=read-only y ajusta ExecStart.
 ProtectHome=true
 PrivateTmp=true
 PrivateDevices=true
-ReadWritePaths=/var/lib/webhub
+ReadWritePaths=/opt/contabo-apps/webhub/data
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true

@@ -17,26 +17,29 @@ node --version   # v22.18.0 o mayor
 Si la distribución trae una versión anterior, instala Node 22 LTS desde NodeSource o con el gestor que uses.
 Si cambias `node` de ruta, ajusta `ExecStart` en el servicio.
 
-## 2. Usuario, código y datos
+## 2. Código y datos
+
+WebHub se instala en `/opt/contabo-apps/webhub` y se ejecuta con el usuario `sysmarc`.
+La base de datos va en `/opt/contabo-apps/webhub/data` (está en `.gitignore`, así que `git pull` no la toca).
 
 ```sh
-sudo useradd --system --home /opt/webhub --shell /usr/sbin/nologin webhub
-sudo mkdir -p /opt/webhub /var/lib/webhub
-sudo chown webhub:webhub /opt/webhub /var/lib/webhub
-sudo chmod 700 /var/lib/webhub
+sudo mkdir -p /opt/contabo-apps/webhub
+sudo chown sysmarc:sysmarc /opt/contabo-apps/webhub
 
-# El repositorio es privado: clona por SSH con una deploy key de solo lectura.
-sudo -u webhub git clone git@github.com:catlinux/WebHub.git /opt/webhub
-cd /opt/webhub
-sudo -u webhub npm ci
-sudo -u webhub npm run build
-sudo -u webhub npm prune --omit=dev   # opcional: en ejecución no hace falta ninguna dependencia
+# Como sysmarc:
+git clone https://github.com/catlinux/WebHub.git /opt/contabo-apps/webhub
+# (con el repo privado: git clone git@github.com:catlinux/WebHub.git /opt/contabo-apps/webhub)
+cd /opt/contabo-apps/webhub
+mkdir -p data && chmod 700 data
+npm ci
+npm run build
 ```
 
 ## 3. PIN
 
 ```sh
-sudo -u webhub env WEBHUB_DATA_DIR=/var/lib/webhub npm run pin
+cd /opt/contabo-apps/webhub
+WEBHUB_DATA_DIR=/opt/contabo-apps/webhub/data npm run pin   # como sysmarc
 ```
 
 Pide el PIN dos veces sin mostrarlo (de 6 a 12 dígitos; cuantos más, mejor). Solo se guarda su hash scrypt.
@@ -48,7 +51,9 @@ desbloquea (el contador está en memoria).
 
 ## 4. Servicio systemd
 
-Copia [webhub.service](webhub.service), cambia `WEBHUB_PUBLIC_ORIGIN` por tu dominio y actívalo:
+Copia [webhub.service](webhub.service), cambia `WEBHUB_PUBLIC_ORIGIN` por tu dominio y actívalo.
+Comprueba la ruta de Node con `which node`: si no es `/usr/bin/node`, ajusta `ExecStart`
+(y si está en `/home/sysmarc` por nvm, pon `ProtectHome=read-only`).
 
 ```sh
 sudo cp docs/webhub.service /etc/systemd/system/webhub.service
@@ -81,21 +86,20 @@ Dos opciones complementarias:
 
 - **Desde la web**: Administrar › Copia de seguridad › Descargar copia (JSON). Incluye familias, enlaces,
   notas, etiquetas, favoritos y contadores; no incluye el PIN ni las sesiones.
-- **En el servidor**: la base de datos está en `/var/lib/webhub/webhub.sqlite` (modo WAL). No la copies
+- **En el servidor**: la base de datos está en `/opt/contabo-apps/webhub/data/webhub.sqlite` (modo WAL). No la copies
   con `cp` en caliente; usa la copia en línea de SQLite (requiere el paquete `sqlite3`):
 
 ```sh
-sqlite3 /var/lib/webhub/webhub.sqlite ".backup '/var/backups/webhub-$(date +%F).sqlite'"
+sqlite3 /opt/contabo-apps/webhub/data/webhub.sqlite ".backup '/var/backups/webhub-$(date +%F).sqlite'"
 ```
 
 ## 7. Actualizar
 
 ```sh
-cd /opt/webhub
-sudo -u webhub git pull
-sudo -u webhub npm ci
-sudo -u webhub npm run build
-sudo -u webhub npm prune --omit=dev
+cd /opt/contabo-apps/webhub   # como sysmarc
+git pull
+npm ci
+npm run build
 sudo systemctl restart webhub
 ```
 
