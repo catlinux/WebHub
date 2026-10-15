@@ -11,6 +11,7 @@ import { ChallengeStore, verifyRegistration, verifyAssertion, WebAuthnError } fr
 import { listPasskeys, getPasskey, countPasskeys, insertPasskey, updatePasskeyUsage, deletePasskey, getWebAuthnUserId } from './passkeys.ts';
 import { getFavicon } from './favicons.ts';
 import { getAspecto, setAspecto } from './aspecto.ts';
+import { logAccess, listAccess, accessSummary, omittedCount } from './accesos.ts';
 import { parseBookmarksHtml, planImport } from '../shared/bookmarks.ts';
 
 export interface AppOptions {
@@ -81,14 +82,20 @@ export function createApp(opts: AppOptions): { server: Server; repo: Repo } {
     const hash = getPinHash(db);
     if (!hash) throw new HttpError(503, 'Aún no hay PIN. Créalo en el servidor con «npm run pin».');
     const pin = typeof body.pin === 'string' ? body.pin : '';
+    const ua = req.headers['user-agent'] ? String(req.headers['user-agent']) : undefined;
     if (!/^\d+$/.test(pin) || pin.length > PIN_MAX || !(await verifySecret(pin, hash))) {
       const lock = limiter.fail(ip);
+      logAccess(db, { kind: 'pin', ok: false, ip, userAgent: ua, detail: 'PIN incorrecto' });
       // Aviso visible en journalctl (nunca se registra el PIN).
-      if (lock) console.warn(`Login bloqueado ${Math.round(lock / 60_000)} min tras varios PIN incorrectos seguidos.`);
+      if (lock) {
+        console.warn(`Login bloqueado ${Math.round(lock / 60_000)} min tras varios PIN incorrectos seguidos.`);
+        logAccess(db, { kind: 'bloqueo', ok: false, ip, userAgent: ua, detail: `Entrada por PIN bloqueada ${Math.round(lock / 60_000)} min` });
+      }
       throw new HttpError(401, 'PIN incorrecto.');
     }
     limiter.succeed(ip);
     const session = createSession(db, sessionDays);
+    logAccess(db, { kind: 'pin', ok: true, ip, userAgent: ua });
     sendJson(res, 200, { ok: true }, { 'Set-Cookie': cookie(session.token, sessionDays * 86400) });
   });
 
@@ -197,7 +204,7 @@ export function createApp(opts: AppOptions): { server: Server; repo: Repo } {
     });
   });
 
-  api.on('POST', '/api/webauthn/register', async ({ req, res }) => {
+  api.on('POST', '/api/webauthn/register', async ({ req, res, ip }) => {
     const body = await readJson(req, 16384);
     if (typeof body.id !== 'string' || !/^[A-Za-z0-9_-]+$/.test(body.id)) throw new HttpError(400, 'Datos no válidos.');
     if (typeof body.clientDataJSON !== 'string') throw new HttpError(400, 'Datos no válidos.');
@@ -245,6 +252,9 @@ export function createApp(opts: AppOptions): { server: Server; repo: Repo } {
       name,
     });
 
+    const uaReg = req.headers['user-agent'] ? String(req.headers['user-agent']) : undefined;
+    logAccess(db, { kind: 'huella-alta', ok: true, ip, userAgent: uaReg, detail: name });
+
     sendJson(res, 201, { id: passkey.id, name: passkey.name, createdAt: passkey.createdAt, lastUsedAt: passkey.lastUsedAt });
   });
 
@@ -253,10 +263,13 @@ export function createApp(opts: AppOptions): { server: Server; repo: Repo } {
     sendJson(res, 200, list);
   });
 
-  api.on('DELETE', '/api/webauthn/credentials/:id', ({ res, params }) => {
+  api.on('DELETE', '/api/webauthn/credentials/:id', ({ req, res, params, ip }) => {
     const id = params.id ?? '';
-    if (!getPasskey(db, id)) throw new HttpError(404, 'No encontrado.');
+    const passkey = getPasskey(db, id);
+    if (!passkey) throw new HttpError(404, 'No encontrado.');
     deletePasskey(db, id);
+    const ua = req.headers['user-agent'] ? String(req.headers['user-agent']) : undefined;
+    logAccess(db, { kind: 'huella-baja', ok: true, ip, userAgent: ua, detail: passkey.name });
     sendJson(res, 200, { ok: true });
   });
 
@@ -275,15 +288,17 @@ export function createApp(opts: AppOptions): { server: Server; repo: Repo } {
     });
   });
 
-  api.on('POST', '/api/webauthn/login', async ({ req, res }) => {
+  api.on('POST', '/api/webauthn/login', async ({ req, res, ip }) => {
+    const ua = req.headers['user-agent'] ? String(req.headers['user-agent']) : undefined;
+    const failHuella = () => logAccess(db, { kind: 'huella', ok: false, ip, userAgent: ua, detail: 'Huella no válida' });
     const body = await readJson(req, 16384);
-    if (typeof body.id !== 'string' || !/^[A-Za-z0-9_-]+$/.test(body.id)) throw new HttpError(401, 'No se pudo verificar la huella.');
-    if (typeof body.clientDataJSON !== 'string') throw new HttpError(401, 'No se pudo verificar la huella.');
-    if (typeof body.authenticatorData !== 'string') throw new HttpError(401, 'No se pudo verificar la huella.');
-    if (typeof body.signature !== 'string') throw new HttpError(401, 'No se pudo verificar la huella.');
+    if (typeof body.id !== 'string' || !/^[A-Za-z0-9_-]+$/.test(body.id)) { failHuella(); throw new HttpError(401, 'No se pudo verificar la huella.'); }
+    if (typeof body.clientDataJSON !== 'string') { failHuella(); throw new HttpError(401, 'No se pudo verificar la huella.'); }
+    if (typeof body.authenticatorData !== 'string') { failHuella(); throw new HttpError(401, 'No se pudo verificar la huella.'); }
+    if (typeof body.signature !== 'string') { failHuella(); throw new HttpError(401, 'No se pudo verificar la huella.'); }
 
     const passkey = getPasskey(db, body.id);
-    if (!passkey) throw new HttpError(401, 'No se pudo verificar la huella.');
+    if (!passkey) { failHuella(); throw new HttpError(401, 'No se pudo verificar la huella.'); }
 
     const origin = expectedOrigin(req);
     const rpId = new URL(origin).hostname;
@@ -302,13 +317,35 @@ export function createApp(opts: AppOptions): { server: Server; repo: Repo } {
       });
       signCount = result.signCount;
     } catch (err) {
-      if (err instanceof WebAuthnError) throw new HttpError(401, 'No se pudo verificar la huella.');
+      if (err instanceof WebAuthnError) { failHuella(); throw new HttpError(401, 'No se pudo verificar la huella.'); }
       throw err;
     }
 
     updatePasskeyUsage(db, passkey.id, signCount);
+    logAccess(db, { kind: 'huella', ok: true, ip, userAgent: ua, detail: passkey.name });
     const session = createSession(db, sessionDays);
     sendJson(res, 200, { ok: true }, { 'Set-Cookie': cookie(session.token, sessionDays * 86400) });
+  });
+
+  api.on('GET', '/api/accesos', ({ res, url }) => {
+    const raw = url.searchParams.get('limite');
+    let limit = 50;
+    if (raw !== null) {
+      const n = Number(raw);
+      if (!Number.isFinite(n)) limit = 50;
+      else {
+        limit = Math.trunc(n);
+        if (limit < 1) limit = 1;
+        if (limit > 200) limit = 200;
+      }
+    }
+    const entries = listAccess(db, limit);
+    sendJson(res, 200, { entries, omitted: omittedCount(db) });
+  });
+
+  api.on('GET', '/api/accesos/resumen', ({ res }) => {
+    const { fallos, desde } = accessSummary(db);
+    sendJson(res, 200, { fallos, desde });
   });
 
   const PUBLIC_API = new Set(['/api/session', '/api/login', '/api/webauthn/login-options', '/api/webauthn/login']);

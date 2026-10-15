@@ -55,6 +55,18 @@ const MIGRATIONS: string[] = [
   );
   `,
   `ALTER TABLE families ADD COLUMN collapsed INTEGER NOT NULL DEFAULT 0;`,
+  `
+  CREATE TABLE access_log (
+    id INTEGER PRIMARY KEY,
+    at TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    ok INTEGER NOT NULL,
+    ip TEXT NOT NULL DEFAULT '',
+    device TEXT NOT NULL DEFAULT '',
+    detail TEXT NOT NULL DEFAULT ''
+  );
+  CREATE INDEX access_log_at ON access_log(at);
+  `,
 ];
 
 /** Abre (o crea) la base de datos y aplica las migraciones pendientes. */
