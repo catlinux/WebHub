@@ -10,6 +10,7 @@ import { LinkChecker } from './checker.ts';
 import { ChallengeStore, verifyRegistration, verifyAssertion, WebAuthnError } from './webauthn.ts';
 import { listPasskeys, getPasskey, countPasskeys, insertPasskey, updatePasskeyUsage, deletePasskey, getWebAuthnUserId } from './passkeys.ts';
 import { getFavicon } from './favicons.ts';
+import { getAspecto, setAspecto } from './aspecto.ts';
 import { parseBookmarksHtml, planImport } from '../shared/bookmarks.ts';
 
 export interface AppOptions {
@@ -98,6 +99,14 @@ export function createApp(opts: AppOptions): { server: Server; repo: Repo } {
 
   // A partir de aquí, todo exige sesión (comprobado en handle()).
   api.on('GET', '/api/data', ({ res }) => sendJson(res, 200, repo.snapshot()));
+
+  api.on('GET', '/api/aspecto', ({ res }) => sendJson(res, 200, getAspecto(db)));
+  api.on('PUT', '/api/aspecto', async (ctx) => {
+    const body = await readJson(ctx.req, 4096);
+    if (!body || typeof body !== 'object' || Array.isArray(body)) throw new HttpError(400, 'Datos no válidos.');
+    const saneado = setAspecto(db, body);
+    sendJson(ctx.res, 200, saneado);
+  });
 
   api.on('POST', '/api/families', async (ctx) => sendJson(ctx.res, 201, repo.createFamily(await readJson(ctx.req))));
   api.on('PATCH', '/api/families/:id', async (ctx) => sendJson(ctx.res, 200, repo.updateFamily(idParam(ctx), await readJson(ctx.req))));
