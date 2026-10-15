@@ -698,7 +698,7 @@ function renderAcceso(container: HTMLElement): void {
       });
       const row = h(
         'div',
-        { class: 'fila-admin' },
+        { class: 'fila-admin fila-acceso' },
         h('span', { class: 'texto', text: c.name }),
         h('span', { class: 'secundario', text: `Alta: ${fechaLocal(c.createdAt)}` }),
         h('span', { class: 'secundario', text: `Último uso: ${c.lastUsedAt ? fechaLocal(c.lastUsedAt) : 'nunca'}` }),
