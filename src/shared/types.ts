@@ -3,6 +3,7 @@ export interface Family {
   parentId: number | null;
   name: string;
   position: number;
+  collapsed: boolean;
 }
 
 export interface Link {

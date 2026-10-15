@@ -54,6 +54,7 @@ const MIGRATIONS: string[] = [
     last_used_at TEXT
   );
   `,
+  `ALTER TABLE families ADD COLUMN collapsed INTEGER NOT NULL DEFAULT 0;`,
 ];
 
 /** Abre (o crea) la base de datos y aplica las migraciones pendientes. */

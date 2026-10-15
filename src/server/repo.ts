@@ -8,13 +8,13 @@ import type { Family, Link, Snapshot } from '../shared/types.ts';
 /** Error de validación: se devuelve al cliente como 400 con este mensaje. */
 export class InputError extends Error {}
 
-interface FamilyRow { id: number; parent_id: number | null; name: string; position: number }
+interface FamilyRow { id: number; parent_id: number | null; name: string; position: number; collapsed: number }
 interface LinkRow {
   id: number; family_id: number; title: string; url: string; note: string; tags: string; favorite: number;
   position: number; clicks: number; last_click_at: string | null; check_status: string | null; checked_at: string | null;
 }
 
-const toFamily = (r: FamilyRow): Family => ({ id: r.id, parentId: r.parent_id, name: r.name, position: r.position });
+const toFamily = (r: FamilyRow): Family => ({ id: r.id, parentId: r.parent_id, name: r.name, position: r.position, collapsed: r.collapsed === 1 });
 const toLink = (r: LinkRow): Link => ({
   id: r.id,
   familyId: r.family_id,
@@ -110,16 +110,21 @@ export class Repo {
     return row.p;
   }
 
-  createFamily(input: { name?: unknown; parentId?: unknown }): Family {
+  createFamily(input: { name?: unknown; parentId?: unknown; collapsed?: unknown }): Family {
     const name = text(input.name, 'nombre', 80, true);
     const parentId = this.checkParent(input.parentId);
+    let collapsed = 0;
+    if (input.collapsed !== undefined) {
+      if (typeof input.collapsed !== 'boolean') throw new InputError('El campo plegada debe ser verdadero o falso.');
+      collapsed = input.collapsed ? 1 : 0;
+    }
     const r = this.db
-      .prepare('INSERT INTO families (parent_id, name, position) VALUES (?, ?, ?)')
-      .run(parentId, name, this.nextFamilyPosition(parentId));
+      .prepare('INSERT INTO families (parent_id, name, position, collapsed) VALUES (?, ?, ?, ?)')
+      .run(parentId, name, this.nextFamilyPosition(parentId), collapsed);
     return toFamily(this.family(Number(r.lastInsertRowid)));
   }
 
-  updateFamily(id: number, input: { name?: unknown; parentId?: unknown }): Family {
+  updateFamily(id: number, input: { name?: unknown; parentId?: unknown; collapsed?: unknown }): Family {
     const current = this.family(id);
     const name = input.name === undefined ? current.name : text(input.name, 'nombre', 80, true);
     let parentId = current.parent_id;
@@ -128,7 +133,12 @@ export class Repo {
       parentId = this.checkParent(input.parentId, id);
       position = this.nextFamilyPosition(parentId);
     }
-    this.db.prepare('UPDATE families SET name = ?, parent_id = ?, position = ? WHERE id = ?').run(name, parentId, position, id);
+    let collapsed = current.collapsed;
+    if (input.collapsed !== undefined) {
+      if (typeof input.collapsed !== 'boolean') throw new InputError('El campo plegada debe ser verdadero o falso.');
+      collapsed = input.collapsed ? 1 : 0;
+    }
+    this.db.prepare('UPDATE families SET name = ?, parent_id = ?, position = ?, collapsed = ? WHERE id = ?').run(name, parentId, position, collapsed, id);
     return toFamily(this.family(id));
   }
 
@@ -261,7 +271,7 @@ export class Repo {
       app: 'WebHub',
       formato: 1,
       exportado: nowIso(),
-      families: families.map(({ id, parentId, name, position }) => ({ id, parentId, name, position })),
+      families: families.map(({ id, parentId, name, position, collapsed }) => ({ id, parentId, name, position, collapsed })),
       links: links.map(({ id, familyId, title, url, note, tags, favorite, position, clicks, lastClickAt }) => ({
         id, familyId, title, url, note, tags, favorite, position, clicks, lastClickAt,
       })),
@@ -284,7 +294,7 @@ export class Repo {
       for (const f of sorted) {
         const parentId = f.parentId == null ? null : map.get(f.parentId);
         if (parentId === undefined) throw new InputError(`La familia «${String(f.name)}» apunta a un padre inexistente.`);
-        map.set(f.id, this.createFamily({ name: f.name, parentId }).id);
+        map.set(f.id, this.createFamily({ name: f.name, parentId, collapsed: f.collapsed === true }).id);
       }
       const sortedLinks = [...links].sort((a, b) => Number(a.position) - Number(b.position));
       for (const l of sortedLinks) {
