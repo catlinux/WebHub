@@ -4,6 +4,60 @@ Todos los cambios relevantes de WebHub se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/)
 y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [0.6.0] - 2026-10-15
+
+### Añadido
+
+- Analizador de páginas: en el diálogo de crear o editar un enlace hay un botón
+  «Analizar página»; en un enlace nuevo se analiza solo al salir del campo URL. El
+  servidor descarga la página y propone título (solo rellena el campo Título si
+  está vacío; nunca pisa uno escrito), descripción (botón «Usar la descripción como
+  nota»; no se rellena sola) y etiquetas sugeridas como botones que se añaden o
+  quitan del campo de etiquetas con un clic (siempre se puede guardar aunque falle
+  el análisis). Todo con reglas locales, sin inteligencia artificial ni servicios
+  externos: ningún enlace sale a un tercero.
+- Propuesta de etiquetas, por orden: primero las etiquetas que el usuario ya usa en
+  sus enlaces cuando coinciden (sin distinguir mayúsculas ni tildes, y con la
+  grafía del usuario); después las palabras clave y etiquetas de artículo que
+  declara la página (máximo 5); reglas por dominio (GitHub y GitLab → git y
+  código; YouTube → vídeo; subdominios docs., wiki., panel., status., api.,
+  mail. → documentación, wiki, panel, monitor, api, correo); el tipo de página
+  (vídeo, artículo); y hasta 3 palabras frecuentes del título y la descripción.
+  Máximo 8, sin duplicados.
+- Lectura de la página: tope de 256 KB (solo se miran los primeros 128 KB y hasta
+  `</head>`), 8 segundos de espera, codificaciones utf-8, iso-8859-1 y
+  windows-1252, decodificación de entidades HTML y sin metadatos falsos dentro de
+  scripts, estilos o comentarios.
+- Ruta `POST /api/links/analizar` (exige sesión), con límite de 20 análisis por
+  minuto en total (429 con `Retry-After`); no se registra la URL analizada.
+  Errores claros: dirección interna (422), la dirección no devuelve una página web
+  (422), tiempo agotado (504), no se pudo descargar (502), URL no válida (400).
+
+### Cambiado
+
+- El dominio real ya no está en el repositorio: `docker-compose.yml` lee
+  `WEBHUB_PUBLIC_ORIGIN` del archivo `.env` (no versionado, ya estaba en
+  `.gitignore`), con `.env.ejemplo` como plantilla; si falta, `docker compose`
+  falla con un mensaje claro; la guía de despliegue usa un dominio de ejemplo
+  (`webhub.ejemplo.com` / `TU-DOMINIO`). Actualizar instalaciones existentes: crear
+  `.env` con `WEBHUB_PUBLIC_ORIGIN=https://tu-dominio` antes de `docker compose up`.
+- En el comprobador, un enlace a una red interna aparece como
+  «bloqueado (red interna)», dentro de «A revisar»; se puede marcar «Está bien».
+
+### Seguridad
+
+- Protección contra peticiones a redes internas: el comprobador de enlaces, la
+  descarga de favicons y el analizador hacen peticiones salientes desde el
+  servidor y antes no tenían restricción (con sesión se podía hacer que el servidor
+  consultara servicios internos del VPS). Ahora no pueden alcanzar direcciones
+  internas: loopback (127.x, ::1), redes privadas (10.x, 172.16–31.x incluido el
+  host de Docker, 192.168.x), enlace local y metadatos de nube (169.254.x),
+  100.64/10, rangos reservados y multicast, direcciones IPv6 locales y las que
+  llevan una IPv4 incrustada (IPv4 mapeada, NAT64, 6to4, Teredo). La IP se valida
+  en el momento de conectar (no antes; un dominio que cambie de IP no sirve) y se
+  comprueba cada salto de redirección (máximo 5); solo http y https; se bloquean
+  las formas disfrazadas (IP en decimal, hexadecimal, corchetes).
+
 ## [0.5.2] - 2026-10-15
 
 ### Añadido

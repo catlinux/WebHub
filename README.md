@@ -40,6 +40,10 @@ Las capturas usan datos de ejemplo inventados (dominios `.example`); ninguna con
     protegidos, posibles privados, a revisar, rotos e ignorados, con los
     botones «Está bien» y «Volver a vigilar».
 
+- **Analizador de páginas** en el diálogo de enlace: botón «Analizar página» (en
+  un enlace nuevo se analiza solo al salir del campo URL); propone título,
+  descripción y etiquetas sugeridas, todo con reglas locales sin inteligencia
+  artificial ni servicios externos; siempre se puede guardar aunque falle.
 - **Reordenar bloques** arrastrando desde su título, solo entre familias del mismo
   nivel; en pantallas táctiles se usa ↑↓ en Administrar › Organizar.
 - **Bloques plegables** con flecha ▾; el contador sigue visible y el estado se
@@ -93,6 +97,10 @@ En el servidor se ejecuta con Docker (`docker compose`) detrás de Apache con HT
 
 Por variables de entorno:
 
+Con Docker, el dominio (`WEBHUB_PUBLIC_ORIGIN`) no va en `docker-compose.yml`: se
+define en el archivo `.env` (cópialo de `.env.ejemplo`); el compose lo lee y falla
+con un mensaje claro si falta.
+
 | Variable | Por defecto | Uso |
 |---|---|---|
 | `WEBHUB_HOST` | `127.0.0.1` | Interfaz de escucha. Déjalo en local y pon un proxy inverso (Apache, Caddy) delante. En Docker, `0.0.0.0` con el puerto publicado solo en `127.0.0.1`. |
@@ -118,6 +126,14 @@ Por variables de entorno:
   Si el bloqueo te afecta a ti, reiniciar el servicio lo borra (`docker compose restart webhub`, o `sudo systemctl restart webhub` sin Docker).
 - Protección CSRF: cabecera propia obligatoria en las escrituras y comprobación de `Origin`.
 - Solo se admiten URLs `http`/`https` (nunca `javascript:` ni `data:`), también al importar.
+- **Peticiones salientes seguras**: el comprobador de enlaces, la descarga de
+  favicons y el analizador no pueden alcanzar direcciones internas (loopback,
+  redes privadas incluido el host de Docker, enlace local y metadatos de nube,
+  100.64/10, multicast, direcciones IPv6 locales y las que llevan una IPv4
+  incrustada); la IP se valida al conectar, en cada redirección (máximo 5) y
+  solo con `http`/`https`, y se bloquean las formas disfrazadas (IP en decimal,
+  hexadecimal o entre corchetes). Un enlace a una red interna aparece como
+  «bloqueado (red interna)».
 - CSP estricta (`script-src 'self'`), sin `innerHTML` con datos del usuario, `X-Frame-Options: DENY` y `Referrer-Policy: no-referrer`.
 - Los registros nunca incluyen cuerpos de petición, cabeceras ni la cookie.
 - **Registro de accesos**: historial de eventos de entrada (con PIN y con

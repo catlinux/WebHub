@@ -8,6 +8,7 @@
       resultado en docs/despliegue.md.
 - [ ] Comprobar el aspecto configurable y las familias plegadas en un móvil real y en producción.
 - [ ] Comprobar el registro de accesos, el modo solo huella, el comprobador y las columnas en un móvil real y en producción.
+- [ ] Probar el analizador de páginas con webs reales y ajustar las reglas de etiquetas si hace falta.
 
 ## Pendiente de decidir
 
@@ -32,3 +33,4 @@
 - [ ] Revisión periódica de enlaces rotos con aviso (hoy solo bajo demanda)
 - [ ] Buscar en la web cuando no hay resultados y filtrar por etiqueta con un clic
 - [ ] Exportar los enlaces como marcadores HTML para otro navegador
+- [ ] Analizar también las páginas al importar marcadores (hoy solo al añadir un enlace)

@@ -189,6 +189,11 @@ docker compose exec webhub node --disable-warning=ExperimentalWarning -e "new (r
 
 ## 7. Actualizar
 
+Nota: si se viene de una versión anterior, crea antes el archivo `.env`
+copiando `.env.ejemplo` y poniendo en él
+`WEBHUB_PUBLIC_ORIGIN=https://tu-dominio`, porque el compose ya no lleva
+el dominio.
+
 ```sh
 cd /opt/contabo-apps/webhub   # como sysmarc
 git pull
@@ -203,7 +208,9 @@ Las migraciones de la base de datos se aplican solas al arrancar. Las migracione
 
 Los favicons y el comprobador de enlaces rotos hacen peticiones desde el VPS a las webs enlazadas
 (los favicons se guardan en caché en la base de datos). Si el VPS no tiene salida o la filtra, verás
-iniciales en lugar de favicons y el comprobador avisará de que casi todo falla por red.
+iniciales en lugar de favicons y el comprobador avisará de que casi todo falla por red. Esas peticiones
+salientes del servidor no alcanzan direcciones internas: la IP se valida al conectar (no antes) y en cada
+redirección, y solo se permiten `http` y `https`.
 
 ## Alternativas
 
@@ -280,6 +287,10 @@ columnas, plegado sin movimiento, reordenación de hermanas y ventana estrecha.
 
 **Registro de accesos, modo solo huella, comprobador y columnas (0.5.0), no comprobado:** nada de esto en
 un móvil físico, Safari ni Firefox, ni en producción (pendiente de que lo confirme el usuario).
+
+**Analizador de páginas, protección contra redes internas y dominio en `.env` (0.6.0), comprobado:** 392 tests automáticos pasan (los de seguridad se verificaron rompiendo el código a propósito: cada comprobación rota hace fallar algún test); el comprobador real contra Internet (sitios públicos por HTTPS, redirección de http a https, dominio inexistente, certificado caducado) sigue dando los mismos resultados y bloquea 127.0.0.1, localhost, 169.254.169.254, 172.18.0.1, ::1, 2130706433 y 192.168.x; prueba de extremo a extremo en Chromium real del diálogo del analizador con páginas de ejemplo locales (análisis automático y manual, título sin pisar, etiquetas que se añaden y quitan, descripción como nota, errores claros, guardar tras un fallo).
+
+**Analizador de páginas, protección contra redes internas y dominio en `.env` (0.6.0), no comprobado:** la calidad de las etiquetas con webs reales variadas, el analizador en un móvil físico ni en producción, ni Safari o Firefox (pendiente de que lo confirme el usuario).
 
 **No probado:**
 
