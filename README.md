@@ -119,6 +119,10 @@ Por variables de entorno:
   servidor rechazando cualquier PIN con 403 sin comprobarlo; recuperación
   ejecutando `npm run pin` (en Docker,
   `docker compose run --rm webhub npm run pin`).
+- **No indexable por buscadores**: WebHub envía la cabecera `X-Robots-Tag`
+  en todas las respuestas y un archivo `robots.txt` que prohíbe el rastreo, de
+  modo que la aplicación no aparece en los buscadores (antes solo había una
+  etiqueta meta en la página de entrada).
 
 ## Desarrollo
 

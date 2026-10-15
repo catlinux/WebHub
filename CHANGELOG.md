@@ -4,6 +4,15 @@ Todos los cambios relevantes de WebHub se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/)
 y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [0.5.1] - 2026-10-15
+
+### Seguridad
+
+- Cabecera `X-Robots-Tag` (noindex, nofollow, noarchive, nosnippet, noimageindex)
+  en todas las respuestas y archivo `robots.txt` que prohíbe el rastreo, para que
+  la aplicación no aparezca en buscadores (antes solo había una etiqueta meta en
+  la página de entrada).
+
 ## [0.5.0] - 2026-10-15
 
 ### Añadido

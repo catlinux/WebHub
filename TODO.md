@@ -2,6 +2,9 @@
 
 ## Pendiente
 
+- [ ] Ocultar el dominio real en el repositorio (docker-compose.yml y guía de
+      despliegue) o hacerlo privado, ya que el dominio sale en el historial
+      público.
 - [ ] Copia automática de `data/` en el VPS (temporizador con `VACUUM INTO`) y confirmar si la copia Borg
       del servidor incluye `/opt/contabo-apps/webhub/data`.
 - [ ] Comprobar la entrada con huella en un móvil real y en el dominio de producción, y anotar el

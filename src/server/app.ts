@@ -38,6 +38,7 @@ const SECURITY_HEADERS: Record<string, string> = {
   'Referrer-Policy': 'no-referrer',
   'Cross-Origin-Opener-Policy': 'same-origin',
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+  'X-Robots-Tag': 'noindex, nofollow, noarchive, nosnippet, noimageindex',
 };
 
 const MIME: Record<string, string> = {
@@ -49,6 +50,7 @@ const MIME: Record<string, string> = {
   '.svg': 'image/svg+xml',
   '.webmanifest': 'application/manifest+json',
   '.map': 'application/json',
+  '.txt': 'text/plain; charset=utf-8',
 };
 
 export function createApp(opts: AppOptions): { server: Server; repo: Repo } {

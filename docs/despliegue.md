@@ -161,6 +161,21 @@ docker compose run --rm webhub npm run pin
 
 Esto cambia el PIN y reactiva la entrada por PIN.
 
+## Que no aparezca en buscadores
+
+WebHub envía la cabecera `X-Robots-Tag` en todas las respuestas y un archivo
+`robots.txt` que prohíbe el rastreo, de modo que los buscadores no indexan la
+aplicación. Esto solo frena a los buscadores que respetan las normas; la
+protección real es el PIN o la huella. El nombre del dominio puede
+descubrirse por otras vías: los registros públicos de certificados de Let's
+Encrypt publican cada nombre de dominio con certificado (un certificado
+comodín los oculta) y, si el repositorio es público, los nombres de dominio que
+aparecen en la guía y en `docker-compose.yml` también. Por eso conviene
+mantener el repositorio privado.
+
+Comprobación: `curl -sI https://tu-dominio/ | grep -i x-robots` y
+`curl https://tu-dominio/robots.txt`.
+
 ## 6. Copias de seguridad
 
 - **Desde la web**: Administrar › Copia de seguridad › Descargar copia (JSON). Incluye familias, enlaces,
