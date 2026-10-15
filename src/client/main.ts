@@ -20,8 +20,8 @@ const root = document.getElementById('app') as HTMLElement;
 async function boot(): Promise<void> {
   setUnauthorizedHandler(() => showLogin());
   try {
-    const session = await api<{ authenticated: boolean; configured: boolean; passkeys: boolean }>('GET', '/api/session');
-    if (!session.authenticated) return showLogin({ configured: session.configured, passkeys: session.passkeys, auto: true });
+    const session = await api<{ authenticated: boolean; configured: boolean; passkeys: boolean; pin?: boolean }>('GET', '/api/session');
+    if (!session.authenticated) return showLogin({ configured: session.configured, passkeys: session.passkeys, pin: session.pin ?? true, auto: true });
     await Promise.all([reload(), cargarAspecto()]);
     buildLayout();
     route();
@@ -42,27 +42,31 @@ export async function reload(): Promise<void> {
 
 // ---------------------------------------------------------------- login
 
-async function showLogin(opts: { configured?: boolean; passkeys?: boolean; auto?: boolean } = {}): Promise<void> {
+async function showLogin(opts: { configured?: boolean; passkeys?: boolean; pin?: boolean; auto?: boolean } = {}): Promise<void> {
   const auto = opts.auto ?? false;
   let configured: boolean;
   let passkeys: boolean;
+  let pin: boolean;
   if (opts.passkeys === undefined) {
     // Esta ruta es pública y responde 200; aun así se evita que un 401 hipotético
     // vuelva a disparar el manejador de sesión caducada (y por tanto showLogin).
     setUnauthorizedHandler(() => {});
     try {
-      const session = await api<{ authenticated: boolean; configured: boolean; passkeys: boolean }>('GET', '/api/session');
+      const session = await api<{ authenticated: boolean; configured: boolean; passkeys: boolean; pin?: boolean }>('GET', '/api/session');
       configured = session.configured;
       passkeys = session.passkeys;
+      pin = session.pin ?? true;
     } catch {
       configured = true;
       passkeys = false;
+      pin = true;
     } finally {
       setUnauthorizedHandler(() => showLogin());
     }
   } else {
     configured = opts.configured ?? true;
     passkeys = opts.passkeys;
+    pin = opts.pin ?? true;
   }
   layout = null;
   window.removeEventListener('hashchange', route);
@@ -92,21 +96,30 @@ async function showLogin(opts: { configured?: boolean; passkeys?: boolean; auto?
         await loginWithPasskey();
         root.className = '';
         await boot();
+        void mostrarAvisoSeguridad();
       } catch (err) {
         error.textContent = (err as Error).message;
         huellaBtn!.disabled = false;
       }
     });
   }
+  // Cuando el PIN está desactivado, la entrada solo se hace con huella.
+  const pinDesactivado = !pin;
+  const avisoPin = pinDesactivado ? h('p', { text: 'La entrada con PIN está desactivada: usa la huella.' }) : null;
+  if (pinDesactivado && !compatible) {
+    error.textContent = 'Este dispositivo no admite huella. Entra desde un dispositivo con la huella activada o reactiva el PIN en el servidor con «npm run pin».';
+  }
+  // El separador «o con el PIN» solo tiene sentido cuando el PIN está activo.
+  if (pinDesactivado) separador = null;
   const form = h(
     'form',
     null,
     h('img', { attrs: { src: '/logo.png', alt: '' } }),
     h('h1', { text: 'WebHub' }),
-    huellaBtn,
-    separador,
-    input,
-    button,
+    avisoPin,
+    ...(pinDesactivado ? [] : [huellaBtn as any, separador as any]),
+    ...(pinDesactivado ? [] : [input, button]),
+    huellaBtn && pinDesactivado ? huellaBtn : null,
     error,
   );
   form.addEventListener('submit', async (ev) => {
@@ -121,6 +134,7 @@ async function showLogin(opts: { configured?: boolean; passkeys?: boolean; auto?
       if (passkeysSupported() && (await platformAvailable()) && !deviceHasPasskey() && !passkeyOfferDismissed()) {
         mostrarAvisoHuella();
       }
+      void mostrarAvisoSeguridad();
     } catch (err) {
       error.textContent = (err as Error).message;
       input.select();
@@ -139,6 +153,7 @@ async function showLogin(opts: { configured?: boolean; passkeys?: boolean; auto?
           await loginWithPasskey();
           root.className = '';
           await boot();
+          void mostrarAvisoSeguridad();
         } catch {
           /* sin error */
         }
@@ -176,6 +191,34 @@ function mostrarAvisoHuella(): void {
     aviso.remove();
   });
   document.body.append(aviso);
+}
+
+function mostrarAvisoSeguridad(): void {
+  void (async () => {
+    try {
+      const res = await api<{ fallos: number; desde: string | null }>('GET', '/api/accesos/resumen');
+      if (!res || !(res.fallos > 0)) return;
+      document.querySelector('.aviso-seguridad')?.remove();
+      const fecha = res.desde ? new Date(res.desde).toLocaleString('es-ES') : 'el principio';
+      const texto = `Desde tu entrada anterior (${fecha}) ha habido ${res.fallos} intento${res.fallos === 1 ? '' : 's'} fallido${res.fallos === 1 ? '' : 's'} de entrada.`;
+      const cerrar = h('button', { class: 'btn', text: 'Cerrar', attrs: { type: 'button' } });
+      const ver = h('button', { class: 'btn primario', text: 'Ver registro', attrs: { type: 'button' } });
+      const aviso = h(
+        'div',
+        { class: 'aviso-seguridad', attrs: { role: 'alert' } },
+        h('span', { text: texto }),
+        h('div', null, ver, ' ', cerrar),
+      );
+      ver.addEventListener('click', () => {
+        aviso.remove();
+        location.hash = '#/admin/acceso';
+      });
+      cerrar.addEventListener('click', () => aviso.remove());
+      document.body.append(aviso);
+    } catch {
+      /* Si la consulta falla no se muestra nada. */
+    }
+  })();
 }
 
 // ---------------------------------------------------------------- estructura

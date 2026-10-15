@@ -335,6 +335,18 @@ dialog .error { color: var(--danger); min-height: 1.2em; margin-top: .5rem; font
 .aviso-huella > div { display: flex; gap: .5rem; }
 @media (max-width: 480px) { .aviso-huella { width: calc(100% - 2rem); } }
 
+.aviso-seguridad {
+  position: fixed; left: 50%; top: 1rem; transform: translateX(-50%);
+  max-width: calc(100% - 2rem); padding: .7rem .9rem;
+  background: var(--panel-2); border: 1px solid var(--warn); border-radius: 0.5rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .5); z-index: 50;
+  display: flex; flex-direction: column; gap: .5rem; align-items: center;
+  color: var(--warn);
+}
+.aviso-seguridad span { font-size: 0.8125rem; }
+.aviso-seguridad > div { display: flex; gap: .5rem; }
+@media (max-width: 480px) { .aviso-seguridad { width: calc(100% - 2rem); } }
+
 .login .separador {
   display: flex; align-items: center; gap: .6rem;
   color: var(--faint); font-size: 0.78125rem; margin: .4rem 0;

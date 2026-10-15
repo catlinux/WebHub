@@ -761,13 +761,18 @@ function fechaLocal(iso: string): string {
 
 function renderAcceso(container: HTMLElement): void {
   interface Credencial { id: string; name: string; createdAt: string; lastUsedAt: string | null }
+  interface AccesoEntrada { id: number; at: string; kind: string; ok: 0 | 1; ip: string; device: string; detail: string }
+  interface AccesoResp { entries: AccesoEntrada[]; omitted: number }
 
   let creds: Credencial[] = [];
   let loading = true;
   let loadError: string | null = null;
+  let pinEnabled = true;
 
   const listWrap = h('div');
   const activationWrap = h('div');
+  const pinWrap = h('div');
+  const regWrap = h('div');
 
   const drawList = () => {
     clear(listWrap);
@@ -802,6 +807,7 @@ function renderAcceso(container: HTMLElement): void {
                   toast('Huella borrada.');
                 } catch (err) {
                   toast((err as Error).message, true);
+                  throw err;
                 }
               },
             );
@@ -833,27 +839,149 @@ function renderAcceso(container: HTMLElement): void {
     } finally {
       loading = false;
       drawList();
+      drawPin();
     }
   };
 
-  clear(
-    container,
-    h(
-      'div',
-      { class: 'seccion' },
-      h('h3', { text: 'Entrada con huella' }),
-      h('p', {
-        class: 'ayuda',
-        text: `La huella (o cara, o Windows Hello) se queda en el dispositivo y el servidor solo guarda una clave pública; el PIN sigue valiendo y sirve para dar de alta cada dispositivo nuevo; las huellas quedan atadas al dominio actual (${location.hostname}).`,
-      }),
-      listWrap,
-      activationWrap,
-      h('p', {
-        class: 'ayuda',
-        text: 'El PIN se cambia en el servidor con «npm run pin» (con Docker: docker compose run --rm webhub npm run pin). Al cambiarlo se cierran todas las sesiones, pero las huellas siguen valiendo.',
-      }),
-    ),
+  const drawPin = () => {
+    clear(pinWrap);
+    const btn = h('button', {
+      class: pinEnabled ? 'btn peligro' : 'btn primario',
+      text: pinEnabled ? 'Desactivar la entrada con PIN (solo huella)' : 'Reactivar la entrada con PIN',
+      attrs: { type: 'button' },
+    });
+    if (pinEnabled && creds.length === 0) {
+      btn.disabled = true;
+      pinWrap.append(btn, h('p', { class: 'ayuda', text: 'Registra antes una huella.' }));
+    } else {
+      pinWrap.append(btn);
+    }
+    btn.addEventListener('click', async () => {
+      if (pinEnabled) {
+        confirmDialog('Desactivar entrada con PIN', 'Nadie podrá entrar con PIN, ni tú. Si pierdes todos los dispositivos con huella tendrás que reactivarlo en el servidor con «npm run pin».', 'Desactivar', async () => {
+          try {
+            const r = await api<{ pin: boolean }>('PUT', '/api/acceso/pin', { enabled: false });
+            pinEnabled = r.pin;
+            await loadCreds();
+            drawPin();
+          } catch (err) {
+            toast((err as Error).message, true);
+            throw err;
+          }
+        });
+      } else {
+        btn.disabled = true;
+        try {
+          const r = await api<{ pin: boolean }>('PUT', '/api/acceso/pin', { enabled: true });
+          pinEnabled = r.pin;
+          drawPin();
+        } catch (err) {
+          toast((err as Error).message, true);
+        } finally {
+          btn.disabled = false;
+        }
+      }
+    });
+  };
+
+  const loadPinState = async () => {
+    try {
+      const s = await api<{ authenticated: boolean; configured: boolean; passkeys: boolean; pin: boolean }>('GET', '/api/session');
+      pinEnabled = !!s.pin;
+    } catch {
+      pinEnabled = true;
+    }
+    drawPin();
+  };
+
+  const etiquetaEvento = (e: AccesoEntrada): string => {
+    switch (e.kind) {
+      case 'pin':
+        if (e.ok) return 'Entrada con PIN';
+        return e.detail === 'PIN desactivado' ? 'PIN desactivado' : 'PIN incorrecto';
+      case 'huella':
+        if (e.ok) return e.detail ? `Entrada con huella (${e.detail})` : 'Entrada con huella';
+        return 'Huella no válida';
+      case 'bloqueo':
+        return e.detail ? `Bloqueo de entrada: ${e.detail}` : 'Bloqueo de entrada';
+      case 'huella-alta':
+        return e.detail ? `Huella añadida (${e.detail})` : 'Huella añadida';
+      case 'huella-baja':
+        return e.detail ? `Huella borrada (${e.detail})` : 'Huella borrada';
+      case 'pin-desactivado':
+        return 'Entrada con PIN desactivada';
+      case 'pin-activado':
+        return 'Entrada con PIN reactivada';
+      default:
+        return e.kind;
+    }
+  };
+
+  const drawReg = (entries: AccesoEntrada[], omitted: number) => {
+    clear(regWrap);
+    const failed24 = entries.filter((e) => e.ok === 0 && Date.now() - new Date(e.at).getTime() <= 24 * 60 * 60 * 1000).length;
+    const lastOk = entries.find((e) => e.ok === 1);
+    let summaryText = 'Todavía no hay accesos registrados.';
+    if (entries.length > 0) {
+      if (lastOk) summaryText = `Último acceso correcto: ${fechaLocal(lastOk.at)} · ${lastOk.device} · ${lastOk.ip}`;
+      else summaryText = 'Todavía no hay accesos registrados.';
+    }
+    regWrap.append(h('p', { class: 'ayuda', text: summaryText }));
+    regWrap.append(h('p', { class: 'ayuda', text: `${failed24} intentos fallidos en las últimas 24 horas` }));
+    if (omitted > 0) {
+      regWrap.append(h('p', { class: 'ayuda', text: `Además se han omitido ${omitted} intentos fallidos por exceso de volumen (protección del registro).` }));
+    }
+    const tbody = h('tbody', null, ...entries.map((e) =>
+      h(
+        'tr',
+        null,
+        h('td', { text: fechaLocal(e.at) }),
+        h('td', { text: etiquetaEvento(e) }),
+        h('td', null, h('span', { class: e.ok ? 'chip ok' : 'chip roto', text: e.ok ? 'Correcto' : 'Fallido' })),
+        h('td', { text: e.ip }),
+        h('td', { text: e.device }),
+      ),
+    ));
+    const table = h(
+      'table',
+      { class: 'tabla' },
+      h('thead', null, h('tr', null, h('th', { text: 'Fecha' }), h('th', { text: 'Evento' }), h('th', { text: 'Resultado' }), h('th', { text: 'IP' }), h('th', { text: 'Dispositivo' }))),
+      tbody,
+    );
+    const actualizar = h('button', { class: 'btn', text: 'Actualizar', attrs: { type: 'button' }, on: { click: () => void loadReg() } });
+    regWrap.append(table, h('p', null, actualizar));
+  };
+
+  const loadReg = async () => {
+    try {
+      const r = await api<AccesoResp>('GET', '/api/accesos?limite=50');
+      drawReg(r.entries ?? [], r.omitted ?? 0);
+    } catch (err) {
+      clear(regWrap, h('p', { class: 'error', text: (err as Error).message }));
+    }
+  };
+
+  const seccionHuellas = h(
+    'div',
+    { class: 'seccion' },
+    h('h3', { text: 'Entrada con huella' }),
+    h('p', {
+      class: 'ayuda',
+      text: `La huella (o cara, o Windows Hello) se queda en el dispositivo y el servidor solo guarda una clave pública; el PIN sigue valiendo y sirve para dar de alta cada dispositivo nuevo; las huellas quedan atadas al dominio actual (${location.hostname}).`,
+    }),
+    listWrap,
+    activationWrap,
+    h('p', {
+      class: 'ayuda',
+      text: 'El PIN se cambia en el servidor con «npm run pin» (con Docker: docker compose run --rm webhub npm run pin). Al cambiarlo se cierran todas las sesiones, pero las huellas siguen valiendo.',
+    }),
   );
+
+  const seccionPin = h('div', { class: 'seccion' }, h('h3', { text: 'Entrada con PIN' }), pinWrap);
+
+  const seccionReg = h('div', { class: 'seccion' }, h('h3', { text: 'Registro de accesos' }), regWrap);
+
+  clear(container, seccionHuellas, seccionPin, seccionReg);
 
   // Se comprueba soporte antes de mostrar el botón de activación.
   void (async () => {
@@ -881,6 +1009,7 @@ function renderAcceso(container: HTMLElement): void {
       activateBtn.disabled = true;
       try {
         await registerPasskey(nombre);
+        document.querySelector('.aviso-huella')?.remove();
         toast('Huella activada.');
         await loadCreds();
       } catch (err) {
@@ -892,5 +1021,10 @@ function renderAcceso(container: HTMLElement): void {
     activationWrap.append(nameInput, h('p', null, activateBtn));
   })();
 
-  void loadCreds();
+  void (async () => {
+    await loadCreds();
+    await loadPinState();
+    await loadReg();
+  })();
 }
+
