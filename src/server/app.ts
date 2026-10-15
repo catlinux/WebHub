@@ -134,6 +134,14 @@ export function createApp(opts: AppOptions): { server: Server; repo: Repo } {
   });
 
   api.on('POST', '/api/families', async (ctx) => sendJson(ctx.res, 201, repo.createFamily(await readJson(ctx.req))));
+  api.on('PUT', '/api/families/layout', async (ctx) => {
+    const body = await readJson(ctx.req, 16384);
+    if (!body || typeof body !== 'object' || Array.isArray(body)) throw new HttpError(400, 'Datos no válidos.');
+    const items = (body as { items?: unknown }).items;
+    if (!Array.isArray(items)) throw new HttpError(400, 'Datos no válidos.');
+    repo.setFamilyLayout(items);
+    sendJson(ctx.res, 200, { ok: true });
+  });
   api.on('PATCH', '/api/families/:id', async (ctx) => sendJson(ctx.res, 200, repo.updateFamily(idParam(ctx), await readJson(ctx.req))));
   api.on('DELETE', '/api/families/:id', (ctx) => {
     repo.deleteFamily(idParam(ctx));

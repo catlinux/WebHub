@@ -8,14 +8,14 @@ import type { Family, Link, Snapshot } from '../shared/types.ts';
 /** Error de validación: se devuelve al cliente como 400 con este mensaje. */
 export class InputError extends Error {}
 
-interface FamilyRow { id: number; parent_id: number | null; name: string; position: number; collapsed: number }
+interface FamilyRow { id: number; parent_id: number | null; name: string; position: number; collapsed: number; col: number | null }
 interface LinkRow {
   id: number; family_id: number; title: string; url: string; note: string; tags: string; favorite: number;
   position: number; clicks: number; last_click_at: string | null; check_status: string | null; checked_at: string | null;
   check_ignored: number;
 }
 
-const toFamily = (r: FamilyRow): Family => ({ id: r.id, parentId: r.parent_id, name: r.name, position: r.position, collapsed: r.collapsed === 1 });
+const toFamily = (r: FamilyRow): Family => ({ id: r.id, parentId: r.parent_id, name: r.name, position: r.position, collapsed: r.collapsed === 1, col: r.col });
 const toLink = (r: LinkRow): Link => ({
   id: r.id,
   familyId: r.family_id,
@@ -157,6 +157,24 @@ export class Repo {
     transaction(this.db, () => (ids as number[]).forEach((fid, i) => stmt.run(i, fid)));
   }
 
+  setFamilyLayout(items: unknown): void {
+    if (!Array.isArray(items)) throw new InputError('Datos no válidos.');
+    const principalIds = (this.db.prepare('SELECT id FROM families WHERE parent_id IS NULL').all() as { id: number }[]).map((r) => r.id);
+    const ids: number[] = [];
+    for (const item of items) {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) throw new InputError('Datos no válidos.');
+      const obj = item as Record<string, unknown>;
+      const id = obj.id;
+      const col = obj.col;
+      if (typeof id !== 'number' || !Number.isInteger(id)) throw new InputError('Orden no válido: recarga la página.');
+      if (typeof col !== 'number' || !Number.isInteger(col) || col < 0 || col > 11) throw new InputError('Columna no válida.');
+      ids.push(id);
+    }
+    if (!isPermutation(principalIds, ids)) throw new InputError('Orden no válido: recarga la página.');
+    const stmt = this.db.prepare('UPDATE families SET position = ?, col = ? WHERE id = ?');
+    transaction(this.db, () => (items as { id: number; col: number }[]).forEach((it, i) => stmt.run(i, it.col, it.id)));
+  }
+
   createLink(input: Record<string, unknown>): Link {
     const familyId = Number(input.familyId);
     this.family(familyId);
@@ -278,7 +296,7 @@ export class Repo {
       app: 'WebHub',
       formato: 1,
       exportado: nowIso(),
-      families: families.map(({ id, parentId, name, position, collapsed }) => ({ id, parentId, name, position, collapsed })),
+      families: families.map(({ id, parentId, name, position, collapsed, col }) => ({ id, parentId, name, position, collapsed, col })),
       links: links.map(({ id, familyId, title, url, note, tags, favorite, position, clicks, lastClickAt, checkIgnored }) => ({
         id, familyId, title, url, note, tags, favorite, position, clicks, lastClickAt, checkIgnored,
       })),
@@ -301,7 +319,11 @@ export class Repo {
       for (const f of sorted) {
         const parentId = f.parentId == null ? null : map.get(f.parentId);
         if (parentId === undefined) throw new InputError(`La familia «${String(f.name)}» apunta a un padre inexistente.`);
-        map.set(f.id, this.createFamily({ name: f.name, parentId, collapsed: f.collapsed === true }).id);
+        const created = this.createFamily({ name: f.name, parentId, collapsed: f.collapsed === true });
+        const rawCol = f.col;
+        const validCol = parentId === null && typeof rawCol === 'number' && Number.isInteger(rawCol) && rawCol >= 0 && rawCol <= 11 ? rawCol : null;
+        if (validCol !== null) this.db.prepare('UPDATE families SET col = ? WHERE id = ?').run(validCol, created.id);
+        map.set(f.id, created.id);
       }
       const sortedLinks = [...links].sort((a, b) => Number(a.position) - Number(b.position));
       for (const l of sortedLinks) {

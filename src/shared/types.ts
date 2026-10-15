@@ -4,6 +4,7 @@ export interface Family {
   name: string;
   position: number;
   collapsed: boolean;
+  col: number | null;
 }
 
 export interface Link {
