@@ -198,8 +198,10 @@ label.etiqueta { display: block; margin: .6rem 0 .2rem; color: var(--muted); fon
 .contenido { flex: 1; overflow-y: auto; padding: .6rem 1rem 2rem; scrollbar-width: thin; }
 
 /* ---------- Listas densas ---------- */
-.columnas { column-width: 20.625rem; column-gap: 1.6rem; }
-.bloque { break-inside: avoid; margin-bottom: .9rem; }
+.columnas { display: flex; gap: 1.6rem; align-items: stretch; min-height: 60vh; }
+.columna { flex: 1 1 0; min-width: 0; min-height: 3rem; }
+.bloque { margin-bottom: .9rem; }
+.columna.destino-final { outline: 2px dashed var(--accent); outline-offset: -2px; background: var(--accent-bg); }
 .bloque h3 {
   display: flex; align-items: baseline; gap: .4rem;
   margin: 0 0 .15rem; padding: .15rem .35rem;

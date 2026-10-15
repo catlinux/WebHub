@@ -11,6 +11,8 @@ import { aplicarFondo, aspectoActual, cargarAspecto } from './aspecto.ts';
 import { passkeysSupported, platformAvailable, loginWithPasskey, deviceHasPasskey, registerPasskey, defaultDeviceName, dismissPasskeyOffer, passkeyOfferDismissed } from './passkeys.ts';
 import { attachTooltips, hideTooltip } from './tooltip.ts';
 import { dropReorder } from '../shared/order.ts';
+import { numeroDeColumnas, asignarColumnas, moverGrupo } from '../shared/layout.ts';
+import type { Destino } from '../shared/layout.ts';
 import type { Family, Link, Snapshot } from '../shared/types.ts';
 
 const root = document.getElementById('app') as HTMLElement;
@@ -233,6 +235,20 @@ interface Layout {
   content: HTMLElement;
 }
 let layout: Layout | null = null;
+let columnasActuales = 1;
+let resizeObserverInstancia: ResizeObserver | null = null;
+let ultimaAsignacion: Map<number, number> = new Map();
+
+function anchoUtilContenido(): number {
+  if (!layout) return 0;
+  const c = layout.content;
+  const st = getComputedStyle(c);
+  const pad = parseFloat(st.paddingLeft) + parseFloat(st.paddingRight);
+  return c.clientWidth - pad;
+}
+function rootPx(): number {
+  return parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+}
 
 function buildLayout(): void {
   const search = h('input', {
@@ -311,6 +327,29 @@ function buildLayout(): void {
     if ((ev as MouseEvent).button === 1) onLinkActivate(ev);
   });
   content.addEventListener('keydown', onListKey);
+  document.addEventListener('dragend', () => {
+    arrastrada = null;
+    grupoArrastrado = null;
+    limpiarMarcasDrag();
+  });
+
+  // Reparto en columnas explícitas: recalcular número de columnas al cambiar el ancho.
+  let resizeRaf = 0;
+  const observer = new ResizeObserver(() => {
+    if (resizeRaf) cancelAnimationFrame(resizeRaf);
+    resizeRaf = requestAnimationFrame(() => {
+      resizeRaf = 0;
+      if (!layout) return;
+      if (state.view.kind === 'admin') return;
+      const n = numeroDeColumnas(anchoUtilContenido(), 20.625 * rootPx(), 1.6 * rootPx());
+      if (n !== columnasActuales) {
+        columnasActuales = n;
+        renderContent();
+      }
+    });
+  });
+  observer.observe(content);
+  resizeObserverInstancia = observer;
 }
 
 function toggleMenu(open?: boolean): void {
@@ -459,10 +498,17 @@ function alternarPlegado(key: string, defaultCollapsed = false): void {
 }
 
 let arrastrada: Family | null = null;
+let grupoArrastrado: number | null = null;
+let enTodos = false;
 
 function marcarDestino(section: HTMLElement | null, after = false): void {
   document.querySelectorAll('.bloque.antes, .bloque.despues').forEach((el) => el.classList.remove('antes', 'despues'));
   section?.classList.add(after ? 'despues' : 'antes');
+}
+
+function limpiarMarcasDrag(): void {
+  document.querySelectorAll('.columna.destino-final').forEach((el) => el.classList.remove('destino-final'));
+  document.querySelectorAll('.bloque.antes, .bloque.despues').forEach((el) => el.classList.remove('antes', 'despues'));
 }
 
 /** Hace arrastrable el bloque de una familia desde su título, entre familias del mismo nivel. */
@@ -470,6 +516,7 @@ function makeDraggable(section: HTMLElement, head: HTMLElement, family: Family):
   head.draggable = true;
   head.addEventListener('dragstart', (ev) => {
     arrastrada = family;
+    grupoArrastrado = family.parentId ?? family.id;
     hideTooltip();
     section.classList.add('arrastrando');
     if (ev.dataTransfer) {
@@ -480,8 +527,10 @@ function makeDraggable(section: HTMLElement, head: HTMLElement, family: Family):
   });
   head.addEventListener('dragend', () => {
     arrastrada = null;
+    grupoArrastrado = null;
     section.classList.remove('arrastrando');
     marcarDestino(null);
+    limpiarMarcasDrag();
   });
   const sameLevel = () => arrastrada !== null && arrastrada.parentId === family.parentId && arrastrada.id !== family.id;
   const isAfter = (ev: DragEvent) => {
@@ -489,6 +538,7 @@ function makeDraggable(section: HTMLElement, head: HTMLElement, family: Family):
     return ev.clientY > r.top + r.height / 2;
   };
   section.addEventListener('dragover', (ev) => {
+    if (enTodos) return;
     if (!sameLevel()) return;
     ev.preventDefault();
     if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'move';
@@ -498,6 +548,7 @@ function makeDraggable(section: HTMLElement, head: HTMLElement, family: Family):
     if (!section.contains(ev.relatedTarget as Node | null)) section.classList.remove('antes', 'despues');
   });
   section.addEventListener('drop', async (ev) => {
+    if (enTodos) return;
     if (!sameLevel() || !arrastrada) return;
     ev.preventDefault();
     const dragged = arrastrada;
@@ -522,6 +573,8 @@ interface BlockOptions {
   family?: Family;
   /** Marca «plegada por defecto» de la familia que representa el bloque. */
   defaultCollapsed?: boolean;
+  /** Id del grupo (familia principal) al que pertenece el bloque. */
+  grupo?: number;
 }
 
 function block(title: string | null, links: Link[], opts: BlockOptions = {}): HTMLElement | null {
@@ -529,6 +582,8 @@ function block(title: string | null, links: Link[], opts: BlockOptions = {}): HT
   const defaultCollapsed = opts.defaultCollapsed === true;
   const collapsed = !!title && !!opts.key && (plegados.has(opts.key) || (defaultCollapsed && !desplegados.has(opts.key)));
   const section = h('section', { class: `bloque${collapsed ? ' plegado' : ''}` });
+  if (opts.grupo !== undefined) section.dataset.grupo = String(opts.grupo);
+  if (opts.family) section.dataset.familia = String(opts.family.id);
   if (title) {
     const head = h('h3');
     if (opts.key) {
@@ -583,18 +638,171 @@ function addLinkButton(familyId: number | null): HTMLElement {
   return h('button', { class: 'btn', text: '+ Enlace', attrs: { type: 'button' }, on: { click: () => linkDialog(null, familyId, reload) } });
 }
 
+function instalarArrastreColumna(colEl: HTMLElement, colIndex: number): void {
+  colEl.addEventListener('dragover', (ev) => {
+    if (!arrastrada || grupoArrastrado === null) return;
+    const res = resolverDestinoFn(colEl, ev);
+    if (res.tipo === 'nada') return;
+    ev.preventDefault();
+    if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'move';
+    limpiarMarcasDrag();
+    if (res.tipo === 'final') {
+      colEl.classList.add('destino-final');
+      return;
+    }
+    if (res.tipo === 'hermanas') {
+      res.target.classList.add(res.after ? 'despues' : 'antes');
+      return;
+    }
+    const blocks = [...colEl.querySelectorAll<HTMLElement>('.bloque')];
+    const grupoBlocks = blocks.filter((b) => Number(b.dataset.grupo) === res.H);
+    if (res.after) grupoBlocks[grupoBlocks.length - 1]?.classList.add('despues');
+    else grupoBlocks[0]?.classList.add('antes');
+  });
+  colEl.addEventListener('dragleave', (ev) => {
+    if (colEl.contains(ev.relatedTarget as Node | null)) return;
+    colEl.classList.remove('destino-final');
+    limpiarMarcasDrag();
+  });
+  colEl.addEventListener('drop', async (ev) => {
+    if (!arrastrada || grupoArrastrado === null) return;
+    const res = resolverDestinoFn(colEl, ev);
+    if (res.tipo === 'nada') return;
+    ev.preventDefault();
+    const dragged = arrastrada;
+    const G = grupoArrastrado;
+    limpiarMarcasDrag();
+    colEl.classList.remove('destino-final');
+    if (res.tipo === 'hermanas') {
+      const targetFamily = familyById(Number(res.target.dataset.familia));
+      if (!targetFamily) return;
+      const parent = targetFamily.parentId;
+      const siblings = (parent === null ? topFamilies() : childrenOf(parent)).map((f) => f.id);
+      try {
+        await api('PUT', '/api/families/order', { parentId: parent, ids: dropReorder(siblings, dragged.id, targetFamily.id, res.after) });
+        await reload();
+      } catch (err) {
+        toast((err as Error).message, true);
+      }
+      return;
+    }
+    const order = topFamilies().map((f) => f.id);
+    const guardadas = new Map(topFamilies().map((f) => [f.id, f.col]));
+    const efectivas = ultimaAsignacion;
+    const destino: Destino =
+      res.tipo === 'final'
+        ? { tipo: 'final', col: colIndex }
+        : { tipo: res.after ? 'despues' : 'antes', id: res.H };
+    try {
+      const out = moverGrupo(order, guardadas, efectivas, G, destino);
+      await api('PUT', '/api/families/layout', { items: out.items });
+      await reload();
+    } catch (err) {
+      toast((err as Error).message, true);
+    }
+  });
+}
+
+function resolverDestinoFn(colEl: HTMLElement, ev: DragEvent): { tipo: 'final' } | { tipo: 'hermanas'; target: HTMLElement; after: boolean } | { tipo: 'grupo'; target: HTMLElement; H: number; after: boolean } | { tipo: 'nada' } {
+  const blocks = [...colEl.querySelectorAll<HTMLElement>('.bloque')];
+  const y = ev.clientY;
+  if (!blocks.length) return { tipo: 'final' };
+  const firstRect = blocks[0].getBoundingClientRect();
+  const lastRect = blocks[blocks.length - 1].getBoundingClientRect();
+  let target: HTMLElement | null = null;
+  let after = false;
+  if (y < firstRect.top) {
+    // Por encima del primer bloque: objetivo = primero, "antes".
+    target = blocks[0];
+    after = false;
+  } else if (y > lastRect.bottom) {
+    // Por debajo del último bloque: destino 'final'.
+    return { tipo: 'final' };
+  } else {
+    // (1) Dentro del rectángulo de algún bloque.
+    for (const b of blocks) {
+      const r = b.getBoundingClientRect();
+      if (y >= r.top && y <= r.bottom) {
+        target = b;
+        after = y > r.top + r.height / 2;
+        break;
+      }
+    }
+    // (2) Hueco entre dos bloques: el más cercano por distancia al borde.
+    if (!target) {
+      for (let i = 0; i < blocks.length - 1; i++) {
+        const rp = blocks[i].getBoundingClientRect();
+        const rn = blocks[i + 1].getBoundingClientRect();
+        if (y > rp.bottom && y < rn.top) {
+          const dPrev = y - rp.bottom;
+          const dNext = rn.top - y;
+          if (dNext <= dPrev) {
+            target = blocks[i + 1];
+            after = false;
+          } else {
+            target = blocks[i];
+            after = true;
+          }
+          break;
+        }
+      }
+    }
+  }
+  if (!target) return { tipo: 'final' };
+  const tf = familyById(Number(target.dataset.familia));
+  const H = Number(target.dataset.grupo);
+  const arr = arrastrada!;
+  const esHermanas = arr.parentId !== null && !!tf && tf.parentId !== null && arr.parentId === tf.parentId;
+  if (esHermanas) {
+    // "antes/después" según la mitad del bloque objetivo.
+    const r = target.getBoundingClientRect();
+    return { tipo: 'hermanas', target, after: y > r.top + r.height / 2 };
+  }
+  if (H !== grupoArrastrado) {
+    // "antes/después" del GRUPO H: centro vertical del conjunto de sus bloques.
+    const grupoBlocks = blocks.filter((b) => Number(b.dataset.grupo) === H);
+    const firstGrRect = grupoBlocks[0]?.getBoundingClientRect();
+    const lastGrRect = grupoBlocks[grupoBlocks.length - 1]?.getBoundingClientRect();
+    const center = firstGrRect && lastGrRect ? (firstGrRect.top + lastGrRect.bottom) / 2 : y;
+    return { tipo: 'grupo', target, H, after: y > center };
+  }
+  return { tipo: 'nada' };
+}
+
+function renderColumnas(grupos: { id: number; col: number | null; peso: number; blocks: HTMLElement[] }[]): HTMLElement {
+  const n = numeroDeColumnas(anchoUtilContenido(), 20.625 * rootPx(), 1.6 * rootPx());
+  columnasActuales = n;
+  const asignacion = asignarColumnas(grupos.map((g) => ({ id: g.id, col: g.col, peso: g.peso })), n);
+  if (enTodos) ultimaAsignacion = asignacion;
+  const cols: HTMLElement[] = Array.from({ length: n }, (_, i) => {
+    const col = h('div', { class: 'columna', data: { col: i } });
+    if (enTodos) instalarArrastreColumna(col, i);
+    return col;
+  });
+  for (const g of grupos) {
+    const ci = asignacion.get(g.id) ?? 0;
+    const safe = ci >= 0 && ci < cols.length ? ci : 0;
+    for (const b of g.blocks) cols[safe].append(b);
+  }
+  return h('div', { class: 'columnas' }, ...cols);
+}
+
 function renderContent(): void {
   if (!layout) return;
   hideTooltip();
   const { content } = layout;
   const v = state.view;
   const query = state.query.trim();
+  enTodos = false;
 
   if (query) {
     const withFamily = state.links.map((l) => Object.assign(Object.create(null), l, { familyName: familyLabel(l.familyId) }) as Link & { familyName: string });
     const results = searchLinks(withFamily, query);
     setHeader(`Buscar «${query}»`, results.length);
-    clear(content, results.length ? h('div', { class: 'columnas' }, block(null, results, { showFamily: true })) : emptyState('Sin resultados.'));
+    enTodos = false;
+    const blk = results.length ? block(null, results, { showFamily: true, grupo: -1 }) : null;
+    const groups = blk ? [{ id: -1, col: null as number | null, peso: 2 + results.length, blocks: [blk] }] : [];
+    clear(content, groups.length ? renderColumnas(groups) : emptyState('Sin resultados.'));
     renderSidebar();
     return;
   }
@@ -614,8 +822,13 @@ function renderContent(): void {
   if (v.kind === 'fav') {
     const { starred, top } = favorites();
     setHeader('Favoritos y más usados', new Set([...starred, ...top]).size, [addLinkButton(null)]);
-    const blocks = [block('Favoritos', starred, { showFamily: true, key: 'fav' }), block('Más usados', top, { showFamily: true, key: 'top' })].filter(Boolean);
-    clear(content, blocks.length ? h('div', { class: 'columnas' }, ...blocks) : emptyState('Marca enlaces con ☆ o úsalos: aquí aparecerán los favoritos y los más abiertos.'));
+    let gi = -100;
+    const groups: { id: number; col: number | null; peso: number; blocks: HTMLElement[] }[] = [];
+    const b1 = starred.length ? block('Favoritos', starred, { showFamily: true, key: 'fav', grupo: gi }) : null;
+    if (b1) { groups.push({ id: gi, col: null, peso: 2 + starred.length, blocks: [b1] }); gi--; }
+    const b2 = top.length ? block('Más usados', top, { showFamily: true, key: 'top', grupo: gi }) : null;
+    if (b2) { groups.push({ id: gi, col: null, peso: 2 + top.length, blocks: [b2] }); gi--; }
+    clear(content, groups.length ? renderColumnas(groups) : emptyState('Marca enlaces con ☆ o úsalos: aquí aparecerán los favoritos y los más abiertos.'));
     return;
   }
 
@@ -627,23 +840,47 @@ function renderContent(): void {
       h('button', { class: 'btn', text: '✎', title: 'Editar familia', attrs: { type: 'button', 'aria-label': 'Editar familia' }, on: { click: () => familyDialog(f, null, reload) } }),
       addLinkButton(f.id),
     ]);
-    const blocks = [
-      block(kids.length ? f.name : null, linksOf(f.id), { key: `f${f.id}`, defaultCollapsed: f.collapsed }),
-      ...kids.map((c) => block(c.name, linksOf(c.id), { href: `#/f/${c.id}`, key: `f${c.id}`, family: c, defaultCollapsed: c.collapsed })),
-    ].filter(Boolean);
-    clear(content, blocks.length ? h('div', { class: 'columnas' }, ...blocks) : emptyState('Esta familia está vacía.'));
+    let gi = -200;
+    const groups: { id: number; col: number | null; peso: number; blocks: HTMLElement[] }[] = [];
+    const parentLinks = linksOf(f.id);
+    const parentBlock = parentLinks.length ? block(kids.length ? f.name : null, parentLinks, { key: `f${f.id}`, defaultCollapsed: f.collapsed, grupo: gi }) : null;
+    if (parentBlock) { groups.push({ id: gi, col: null, peso: 2 + parentLinks.length, blocks: [parentBlock] }); gi--; }
+    for (const c of kids) {
+      const clinks = linksOf(c.id);
+      if (!clinks.length) continue;
+      const cb = block(c.name, clinks, { href: `#/f/${c.id}`, key: `f${c.id}`, family: c, defaultCollapsed: c.collapsed, grupo: gi });
+      if (cb) { groups.push({ id: gi, col: null, peso: 2 + clinks.length, blocks: [cb] }); gi--; }
+    }
+    clear(content, groups.length ? renderColumnas(groups) : emptyState('Esta familia está vacía.'));
     return;
   }
 
-  // Todos: cada familia y subfamilia como bloque, en columnas.
+  // Todos: grupos de familia principal + subfamilias, en columnas explícitas.
   setHeader('Todos', state.links.length, [addLinkButton(null)]);
-  const blocks: (HTMLElement | null)[] = [];
+  enTodos = true;
+  const groups: { id: number; col: number | null; peso: number; blocks: HTMLElement[] }[] = [];
   for (const f of topFamilies()) {
-    blocks.push(block(f.name, linksOf(f.id), { href: `#/f/${f.id}`, key: `f${f.id}`, family: f, defaultCollapsed: f.collapsed }));
-    for (const c of childrenOf(f.id)) blocks.push(block(`${f.name} › ${c.name}`, linksOf(c.id), { href: `#/f/${c.id}`, key: `f${c.id}`, family: c, defaultCollapsed: c.collapsed }));
+    const principalLinks = linksOf(f.id);
+    const childList = childrenOf(f.id).filter((c) => linksOf(c.id).length > 0);
+    const hasAny = principalLinks.length > 0 || childList.length > 0;
+    if (!hasAny) continue;
+    let peso = 0;
+    if (principalLinks.length) peso += 2 + principalLinks.length;
+    const blocks: HTMLElement[] = [];
+    if (principalLinks.length) {
+      const pb = block(f.name, principalLinks, { href: `#/f/${f.id}`, key: `f${f.id}`, family: f, defaultCollapsed: f.collapsed, grupo: f.id });
+      if (pb) { pb.dataset.grupo = String(f.id); blocks.push(pb); }
+    }
+    for (const c of childList) {
+      const clinks = linksOf(c.id);
+      peso += 2 + clinks.length;
+      const cb = block(`${f.name} › ${c.name}`, clinks, { href: `#/f/${c.id}`, key: `f${c.id}`, family: c, defaultCollapsed: c.collapsed, grupo: f.id });
+      if (cb) { cb.dataset.grupo = String(f.id); blocks.push(cb); }
+    }
+    if (!blocks.length) continue;
+    groups.push({ id: f.id, col: f.col, peso, blocks });
   }
-  const visible = blocks.filter(Boolean);
-  clear(content, visible.length ? h('div', { class: 'columnas' }, ...visible) : emptyState('Las familias están vacías. Añade enlaces con «+ Enlace».'));
+  clear(content, groups.length ? renderColumnas(groups) : emptyState('Las familias están vacías. Añade enlaces con «+ Enlace».'));
 }
 
 // ---------------------------------------------------------------- interacción
