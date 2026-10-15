@@ -4,8 +4,8 @@ import { state, topFamilies, childrenOf, familyById, linksOf, countFamily, famil
 import { linkDialog, familyDialog, confirmDialog } from './dialogs.ts';
 import { dropReorder, moveItem } from '../shared/order.ts';
 import { classify } from '../shared/check.ts';
-import { FONDOS, ASPECTO_INICIAL, type Aspecto } from '../shared/aspecto.ts';
-import { cargarAspecto, guardarAspecto, aplicarAspecto } from './aspecto.ts';
+import { FONDOS, ASPECTO_INICIAL, TEMAS, FUENTES, DENSIDADES, PESOS_TITULO, type Aspecto } from '../shared/aspecto.ts';
+import { aspectoActual, cambiarAspecto, aplicarFondo } from './aspecto.ts';
 import { passkeysSupported, platformAvailable, registerPasskey, defaultDeviceName, markDevicePasskey } from './passkeys.ts';
 import type { ImportPlan, PlanGroup } from '../shared/bookmarks.ts';
 import type { Family, Link } from '../shared/types.ts';
@@ -591,10 +591,47 @@ function renderChecker(container: HTMLElement, reload: Reload): void {
 // ================================================================ Aspecto
 
 function renderAspecto(container: HTMLElement, area: HTMLElement): void {
-  let actual = cargarAspecto();
+  void area;
+
+  const temaButtons = TEMAS.map(([id, label]) => {
+    const boton = h('button', { class: 'opcion-fondo', text: label, attrs: { type: 'button', 'data-tema': id, 'aria-pressed': 'false' } });
+    boton.addEventListener('click', () => cambiar({ tema: id }));
+    return boton;
+  });
+
+  const textoRange = h('input', { attrs: { type: 'range', min: 80, max: 200, step: 5, 'aria-label': 'Tamaño del texto' } });
+  const textoValor = h('span', { class: 'secundario' });
+
+  const fuenteButtons = FUENTES.map(([id, label]) => {
+    const boton = h('button', { class: 'opcion-fuente', text: label, attrs: { type: 'button', 'data-fuente': id, 'aria-pressed': 'false' } });
+    boton.addEventListener('click', () => cambiar({ fuente: id }));
+    return boton;
+  });
+
+  const densidadButtons = DENSIDADES.map(([id, label]) => {
+    const boton = h('button', { class: 'btn', text: label, attrs: { type: 'button', 'data-densidad': id, 'aria-pressed': 'false' } });
+    boton.addEventListener('click', () => cambiar({ densidad: id }));
+    return boton;
+  });
+
+  const tituloRange = h('input', { attrs: { type: 'range', min: 100, max: 220, step: 1, 'aria-label': 'Tamaño de los títulos de familia' } });
+  const tituloValor = h('span', { class: 'secundario' });
+  const pesoButtons = PESOS_TITULO.map(([valor, label]) => {
+    const boton = h('button', { class: 'btn', text: label, attrs: { type: 'button', 'data-peso': String(valor), 'aria-pressed': 'false' } });
+    boton.addEventListener('click', () => cambiar({ tituloPeso: valor }));
+    return boton;
+  });
+  const mayusCheck = h('input', { attrs: { type: 'checkbox', 'aria-label': 'Mayúsculas' } });
+  const tituloColorInput = h('input', { attrs: { type: 'color', 'aria-label': 'Color de los títulos' } });
+  const tituloColorUsar = h('button', { class: 'btn', text: 'Usar el del tema', attrs: { type: 'button' } });
+  const acentoInput = h('input', { attrs: { type: 'color', 'aria-label': 'Color de acento' } });
+  const acentoUsar = h('button', { class: 'btn', text: 'Usar el del tema', attrs: { type: 'button' } });
+
+  const dominioCheck = h('input', { attrs: { type: 'checkbox', 'aria-label': 'Mostrar el dominio' } });
+
   const muestras = FONDOS.map(([id, nombre]) => {
     const muestra = h('div', { class: 'muestra-fondo', attrs: { 'aria-hidden': 'true' } });
-    const boton = h('button', { class: 'opcion-fondo', attrs: { type: 'button' } }, muestra, h('span', { text: nombre }));
+    const boton = h('button', { class: 'opcion-fondo', attrs: { type: 'button', 'aria-pressed': 'false' } }, muestra, h('span', { text: nombre }));
     boton.addEventListener('click', () => cambiar({ fondo: id }));
     return { id, muestra, boton };
   });
@@ -603,31 +640,103 @@ function renderAspecto(container: HTMLElement, area: HTMLElement): void {
   const valor = h('span', { class: 'secundario' });
 
   function pintar(): void {
-    aplicarAspecto(area, actual);
-    for (const m of muestras) {
-      aplicarAspecto(m.muestra, { ...actual, fondo: m.id });
-      m.boton.classList.toggle('activa', m.id === actual.fondo);
-      m.boton.setAttribute('aria-pressed', String(m.id === actual.fondo));
+    const a = aspectoActual();
+    for (const boton of temaButtons) {
+      const activo = boton.dataset.tema === a.tema;
+      boton.classList.toggle('activa', activo);
+      boton.setAttribute('aria-pressed', String(activo));
     }
-    color.value = actual.color;
-    fuerza.value = String(actual.intensidad);
-    valor.textContent = `${actual.intensidad} %`;
+    textoRange.value = String(a.texto);
+    textoValor.textContent = `${a.texto} %`;
+
+    for (const boton of fuenteButtons) {
+      const activo = boton.dataset.fuente === a.fuente;
+      boton.classList.toggle('activa', activo);
+      boton.setAttribute('aria-pressed', String(activo));
+    }
+    for (const boton of densidadButtons) {
+      const activo = boton.dataset.densidad === a.densidad;
+      boton.classList.toggle('primario', activo);
+      boton.setAttribute('aria-pressed', String(activo));
+    }
+    tituloRange.value = String(a.tituloTamano);
+    tituloValor.textContent = `${a.tituloTamano} %`;
+    for (const boton of pesoButtons) {
+      const activo = Number(boton.dataset.peso) === a.tituloPeso;
+      boton.classList.toggle('primario', activo);
+      boton.setAttribute('aria-pressed', String(activo));
+    }
+    mayusCheck.checked = a.tituloMayusculas;
+    tituloColorInput.value = (a.tituloColor ?? a.acento ?? '#3fe0c5');
+    acentoInput.value = (a.acento ?? '#3fe0c5');
+    dominioCheck.checked = a.mostrarDominio;
+
+    for (const m of muestras) {
+      aplicarFondo(m.muestra, { ...a, fondo: m.id });
+      m.boton.classList.toggle('activa', m.id === a.fondo);
+      m.boton.setAttribute('aria-pressed', String(m.id === a.fondo));
+    }
+    color.value = a.color;
+    fuerza.value = String(a.intensidad);
+    valor.textContent = `${a.intensidad} %`;
   }
+
   function cambiar(parcial: Partial<Aspecto>): void {
-    actual = { ...actual, ...parcial };
-    guardarAspecto(actual);
+    cambiarAspecto(parcial);
     pintar();
   }
+
+  textoRange.addEventListener('input', () => cambiar({ texto: Number(textoRange.value) }));
+  tituloRange.addEventListener('input', () => cambiar({ tituloTamano: Number(tituloRange.value) }));
+  mayusCheck.addEventListener('change', () => cambiar({ tituloMayusculas: mayusCheck.checked }));
+  tituloColorInput.addEventListener('input', () => cambiar({ tituloColor: tituloColorInput.value }));
+  tituloColorUsar.addEventListener('click', () => cambiar({ tituloColor: null }));
+  acentoInput.addEventListener('input', () => cambiar({ acento: acentoInput.value }));
+  acentoUsar.addEventListener('click', () => cambiar({ acento: null }));
+  dominioCheck.addEventListener('change', () => cambiar({ mostrarDominio: dominioCheck.checked }));
   color.addEventListener('input', () => cambiar({ color: color.value }));
   fuerza.addEventListener('input', () => cambiar({ intensidad: Number(fuerza.value) }));
 
   clear(
     container,
-    h(
-      'div',
-      { class: 'seccion' },
+    h('p', { class: 'ayuda', text: 'Los cambios se ven al momento y se guardan en el servidor: valen en todos tus dispositivos.' }),
+    h('div', { class: 'seccion' },
+      h('h3', { text: 'Tema' }),
+      h('div', { class: 'opciones-fondo' }, ...temaButtons),
+    ),
+    h('div', { class: 'seccion' },
+      h('h3', { text: 'Tamaño del texto' }),
+      h('div', { class: 'fila-rango' }, textoRange, textoValor),
+      h('p', { text: 'Aa Ejemplo de enlace' }),
+    ),
+    h('div', { class: 'seccion' },
+      h('h3', { text: 'Fuente' }),
+      h('div', { class: 'opciones-fondo' }, ...fuenteButtons),
+    ),
+    h('div', { class: 'seccion' },
+      h('h3', { text: 'Densidad' }),
+      h('div', { class: 'opciones-fondo' }, ...densidadButtons),
+    ),
+    h('div', { class: 'seccion' },
+      h('h3', { text: 'Títulos de familia' }),
+      h('div', { class: 'fila-rango' }, tituloRange, tituloValor),
+      h('div', { class: 'opciones-fondo' }, ...pesoButtons),
+      h('label', { class: 'check' }, mayusCheck, 'Mayúsculas'),
+      h('div', { class: 'ajustes-fondo' },
+        h('label', { class: 'etiqueta' }, 'Color'),
+        h('div', { class: 'fila-rango' }, tituloColorInput, tituloColorUsar),
+      ),
+    ),
+    h('div', { class: 'seccion' },
+      h('h3', { text: 'Color de acento' }),
+      h('div', { class: 'fila-rango' }, acentoInput, acentoUsar),
+    ),
+    h('div', { class: 'seccion' },
+      h('h3', { text: 'Enlaces' }),
+      h('label', { class: 'check' }, dominioCheck, 'Mostrar el dominio junto a cada enlace'),
+    ),
+    h('div', { class: 'seccion' },
       h('h3', { text: 'Fondo del área central' }),
-      h('p', { class: 'ayuda', text: 'Un fondo discreto detrás de las listas. Se ve al momento y se guarda en este navegador: en cada dispositivo se configura por separado.' }),
       h('div', { class: 'opciones-fondo' }, ...muestras.map((m) => m.boton)),
       h('div', { class: 'ajustes-fondo' },
         h('label', { class: 'etiqueta' }, 'Color'),
@@ -635,9 +744,12 @@ function renderAspecto(container: HTMLElement, area: HTMLElement): void {
         h('label', { class: 'etiqueta' }, 'Intensidad'),
         h('div', { class: 'fila-rango' }, fuerza, valor),
       ),
-      h('button', { class: 'btn', text: 'Restablecer', attrs: { type: 'button' }, on: { click: () => cambiar(ASPECTO_INICIAL) } }),
+    ),
+    h('div', { class: 'seccion' },
+      h('button', { class: 'btn peligro', text: 'Restablecer todo', attrs: { type: 'button' }, on: { click: () => cambiar(ASPECTO_INICIAL) } }),
     ),
   );
+
   pintar();
 }
 

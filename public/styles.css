@@ -72,6 +72,19 @@ html { font-size: calc(16px * var(--escala, 1)); }
 :root[data-fuente="serif"] { --font: Georgia, "DejaVu Serif", "Times New Roman", serif; }
 :root[data-fuente="mono"] { --font: var(--mono); }
 
+/* Etiquetas de fuente en la pestaña Aspecto, escritas con esa fuente. */
+.opcion-fuente[data-fuente="sistema"] { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, Cantarell, sans-serif; }
+.opcion-fuente[data-fuente="verdana"] { font-family: Verdana, Geneva, "DejaVu Sans", sans-serif; }
+.opcion-fuente[data-fuente="humanista"] { font-family: "Trebuchet MS", "Segoe UI", Ubuntu, Candara, sans-serif; }
+.opcion-fuente[data-fuente="serif"] { font-family: Georgia, "DejaVu Serif", "Times New Roman", serif; }
+.opcion-fuente[data-fuente="mono"] { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; }
+.opcion-fuente {
+  padding: .45rem .7rem; cursor: pointer; background: var(--panel); border: 1px solid var(--line);
+  border-radius: var(--radius); color: var(--text);
+}
+.opcion-fuente.activa { border-color: var(--accent); color: var(--accent); }
+.opcion-fuente:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
 /* Densidades */
 :root[data-densidad="compacta"] { --row-base: 1.375rem; }
 :root[data-densidad="normal"] { --row-base: 1.625rem; }
@@ -147,7 +160,7 @@ label.etiqueta { display: block; margin: .6rem 0 .2rem; color: var(--muted); fon
   font-weight: 700; letter-spacing: .05em; font-size: 0.9375rem; text-decoration: none;
 }
 .marca img { width: 1.75rem; height: 1.75rem; filter: drop-shadow(0 0 6px color-mix(in srgb, var(--accent) 35%, transparent)); }
-.buscador { position: relative; width: min(21.25rem, 38vw); }
+.buscador { position: relative; flex: 1 1 8rem; min-width: 6rem; max-width: min(21.25rem, 38vw); width: auto; }
 .buscador .campo { padding-right: 3.4rem; }
 .buscador kbd {
   position: absolute; right: .45rem; top: 0.375rem; font: 0.6875rem var(--mono); color: var(--faint);
@@ -177,8 +190,8 @@ label.etiqueta { display: block; margin: .6rem 0 .2rem; color: var(--muted); fon
   display: flex; align-items: center; gap: .6rem; min-height: 2.75rem; padding: .45rem 1rem;
   border-bottom: 1px solid var(--line);
 }
-.barra h2 { margin: 0; font-size: 0.9375rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.barra .contador { color: var(--faint); font-size: 0.75rem; }
+.barra h2 { margin: 0; font-size: 0.9375rem; font-weight: 600; white-space: nowrap; flex-shrink: 0; overflow: visible; text-overflow: clip; }
+.barra .contador { color: var(--faint); font-size: 0.75rem; white-space: nowrap; flex-shrink: 0; }
 .barra .espacio { flex: 1; }
 .acciones-barra { display: flex; gap: .4rem; }
 .menu-btn { display: none; }
@@ -417,7 +430,7 @@ table.tabla { width: 100%; border-collapse: collapse; font-size: 0.78125rem; }
   .barra { flex-wrap: wrap; }
   .barra h2 { flex: 1; }
   .barra .espacio { display: none; }
-  .buscador { order: 10; width: 100%; }
+  .buscador { order: 10; width: 100%; max-width: none; min-width: 0; flex: 0 0 100%; }
   /* iOS hace zoom al enfocar campos de menos de 1rem. */
   .campo, select.campo { font-size: 1rem; height: 2.25rem; }
   .pestanas { flex-wrap: wrap; padding: 0 .2rem; }
@@ -443,6 +456,6 @@ table.tabla { width: 100%; border-collapse: collapse; font-size: 0.78125rem; }
   .barra { flex-wrap: nowrap; }
   .barra h2 { flex: 0 1 auto; }
   .barra .espacio { display: block; }
-  .buscador { order: 0; width: min(21.25rem, 45vw); }
+  .buscador { order: 0; width: min(21.25rem, 45vw); max-width: none; flex: 0 1 auto; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }

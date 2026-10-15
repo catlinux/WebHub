@@ -7,7 +7,7 @@ import {
 import { searchLinks } from '../shared/search.ts';
 import { linkDialog, familyDialog } from './dialogs.ts';
 import { renderAdmin } from './admin.ts';
-import { aplicarAspecto } from './aspecto.ts';
+import { aplicarFondo, aspectoActual, cargarAspecto } from './aspecto.ts';
 import { passkeysSupported, platformAvailable, loginWithPasskey, deviceHasPasskey, registerPasskey, defaultDeviceName, dismissPasskeyOffer, passkeyOfferDismissed } from './passkeys.ts';
 import { attachTooltips, hideTooltip } from './tooltip.ts';
 import { dropReorder } from '../shared/order.ts';
@@ -22,7 +22,7 @@ async function boot(): Promise<void> {
   try {
     const session = await api<{ authenticated: boolean; configured: boolean; passkeys: boolean }>('GET', '/api/session');
     if (!session.authenticated) return showLogin({ configured: session.configured, passkeys: session.passkeys, auto: true });
-    await reload();
+    await Promise.all([reload(), cargarAspecto()]);
     buildLayout();
     route();
     window.addEventListener('hashchange', route);
@@ -258,7 +258,7 @@ function buildLayout(): void {
       }
     }
   });
-  aplicarAspecto(content);
+  aplicarFondo(content, aspectoActual());
   attachTooltips(content, (a) => {
     const link = linkById(Number(a.dataset.id));
     return link ? tooltipOf(link) : null;
