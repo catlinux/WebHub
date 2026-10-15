@@ -48,7 +48,7 @@ test('sin sesión la API devuelve 401 y la sesión aparece como no iniciada', as
   assert.equal((await call('GET', '/api/data')).status, 401);
   assert.equal((await call('POST', '/api/families', { name: 'x' })).status, 401);
   const s = await call('GET', '/api/session');
-  assert.deepEqual(s.json, { authenticated: false, configured: true });
+  assert.deepEqual(s.json, { authenticated: false, configured: true, passkeys: false });
 });
 
 test('la página se sirve con cabeceras de seguridad', async () => {

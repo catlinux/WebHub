@@ -43,6 +43,17 @@ const MIGRATIONS: string[] = [
     fetched_at TEXT NOT NULL
   );
   `,
+  `
+  CREATE TABLE passkeys (
+    id TEXT PRIMARY KEY,
+    public_key TEXT NOT NULL,
+    alg INTEGER NOT NULL,
+    counter INTEGER NOT NULL DEFAULT 0,
+    name TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    last_used_at TEXT
+  );
+  `,
 ];
 
 /** Abre (o crea) la base de datos y aplica las migraciones pendientes. */

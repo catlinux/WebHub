@@ -7,6 +7,8 @@ import { Router, HttpError, sendJson, readJson, parseCookies, clientIp, idParam,
 import { Repo, InputError } from './repo.ts';
 import { LoginLimiter, PIN_MAX, createSession, deleteSession, getPinHash, isValidSession, verifySecret } from './auth.ts';
 import { LinkChecker } from './checker.ts';
+import { ChallengeStore, verifyRegistration, verifyAssertion, WebAuthnError } from './webauthn.ts';
+import { listPasskeys, getPasskey, countPasskeys, insertPasskey, updatePasskeyUsage, deletePasskey, getWebAuthnUserId } from './passkeys.ts';
 import { getFavicon } from './favicons.ts';
 import { parseBookmarksHtml, planImport } from '../shared/bookmarks.ts';
 
@@ -54,16 +56,19 @@ export function createApp(opts: AppOptions): { server: Server; repo: Repo } {
   const checker = opts.checker ?? new LinkChecker(repo);
   const publicDir = opts.publicDir ?? DEFAULT_PUBLIC;
   const sessionDays = opts.sessionDays ?? 30;
+  const regChallenges = new ChallengeStore();
+  const loginChallenges = new ChallengeStore();
 
   const cookie = (value: string, maxAge: number) =>
     `${COOKIE}=${value}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${opts.insecureCookie ? '' : '; Secure'}`;
   const token = (req: IncomingMessage) => parseCookies(req.headers.cookie)[COOKIE];
   const authed = (req: IncomingMessage) => isValidSession(db, token(req));
+  const expectedOrigin = (req: IncomingMessage) => opts.publicOrigin || `${opts.insecureCookie ? 'http' : 'https'}://${req.headers.host}`;
 
   const api = new Router();
 
   api.on('GET', '/api/session', ({ req, res }) => {
-    sendJson(res, 200, { authenticated: authed(req), configured: getPinHash(db) !== null });
+    sendJson(res, 200, { authenticated: authed(req), configured: getPinHash(db) !== null, passkeys: countPasskeys(db) > 0 });
   });
 
   api.on('POST', '/api/login', async ({ req, res, ip }) => {
@@ -165,7 +170,139 @@ export function createApp(opts: AppOptions): { server: Server; repo: Repo } {
     res.end(icon.data);
   });
 
-  const PUBLIC_API = new Set(['/api/session', '/api/login']);
+  // ---- Passkeys (WebAuthn) ----
+  api.on('POST', '/api/webauthn/register-options', ({ req, res }) => {
+    const origin = expectedOrigin(req);
+    const rpId = new URL(origin).hostname;
+    const challenge = regChallenges.create();
+    const excludeCredentials = listPasskeys(db).map((p) => ({ type: 'public-key', id: p.id }));
+    sendJson(res, 200, {
+      challenge,
+      rp: { id: rpId, name: 'WebHub' },
+      user: { id: getWebAuthnUserId(db), name: 'webhub', displayName: 'WebHub' },
+      pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }, { type: 'public-key', alg: -8 }],
+      authenticatorSelection: { authenticatorAttachment: 'platform', residentKey: 'preferred', userVerification: 'required' },
+      attestation: 'none',
+      timeout: 120000,
+      excludeCredentials,
+    });
+  });
+
+  api.on('POST', '/api/webauthn/register', async ({ req, res }) => {
+    const body = await readJson(req, 16384);
+    if (typeof body.id !== 'string' || !/^[A-Za-z0-9_-]+$/.test(body.id)) throw new HttpError(400, 'Datos no válidos.');
+    if (typeof body.clientDataJSON !== 'string') throw new HttpError(400, 'Datos no válidos.');
+    if (typeof body.authenticatorData !== 'string') throw new HttpError(400, 'Datos no válidos.');
+    if (typeof body.publicKey !== 'string') throw new HttpError(400, 'Datos no válidos.');
+    if (typeof body.alg !== 'number' || !Number.isInteger(body.alg)) throw new HttpError(400, 'Datos no válidos.');
+    if (body.name !== undefined && typeof body.name !== 'string') throw new HttpError(400, 'Datos no válidos.');
+
+    let name = 'Dispositivo';
+    if (typeof body.name === 'string') {
+      const trimmed = body.name.trim();
+      if (trimmed) {
+        if (trimmed.length > 60) throw new HttpError(400, 'Datos no válidos.');
+        name = trimmed;
+      }
+    }
+
+    if (countPasskeys(db) >= 10) throw new HttpError(400, 'Se ha alcanzado el máximo de huellas.');
+    if (getPasskey(db, body.id)) throw new HttpError(409, 'Ya existe una huella con ese identificador.');
+
+    const origin = expectedOrigin(req);
+    const rpId = new URL(origin).hostname;
+    let result: { credentialId: string; publicKey: string; alg: number; signCount: number };
+    try {
+      result = verifyRegistration({
+        id: body.id,
+        clientDataJSON: body.clientDataJSON,
+        authenticatorData: body.authenticatorData,
+        publicKey: body.publicKey,
+        alg: body.alg,
+        origin,
+        rpId,
+        challenges: regChallenges,
+      });
+    } catch (err) {
+      if (err instanceof WebAuthnError) throw new HttpError(400, 'No se pudo registrar la huella.');
+      throw err;
+    }
+
+    const passkey = insertPasskey(db, {
+      id: result.credentialId,
+      publicKey: result.publicKey,
+      alg: result.alg,
+      counter: result.signCount,
+      name,
+    });
+
+    sendJson(res, 201, { id: passkey.id, name: passkey.name, createdAt: passkey.createdAt, lastUsedAt: passkey.lastUsedAt });
+  });
+
+  api.on('GET', '/api/webauthn/credentials', ({ res }) => {
+    const list = listPasskeys(db).map((p) => ({ id: p.id, name: p.name, createdAt: p.createdAt, lastUsedAt: p.lastUsedAt }));
+    sendJson(res, 200, list);
+  });
+
+  api.on('DELETE', '/api/webauthn/credentials/:id', ({ res, params }) => {
+    const id = params.id ?? '';
+    if (!getPasskey(db, id)) throw new HttpError(404, 'No encontrado.');
+    deletePasskey(db, id);
+    sendJson(res, 200, { ok: true });
+  });
+
+  api.on('POST', '/api/webauthn/login-options', ({ req, res }) => {
+    const passkeys = listPasskeys(db);
+    if (passkeys.length === 0) throw new HttpError(404, 'No hay huellas registradas.');
+    const origin = expectedOrigin(req);
+    const rpId = new URL(origin).hostname;
+    const challenge = loginChallenges.create();
+    sendJson(res, 200, {
+      challenge,
+      rpId,
+      allowCredentials: passkeys.map((p) => ({ type: 'public-key', id: p.id })),
+      userVerification: 'required',
+      timeout: 120000,
+    });
+  });
+
+  api.on('POST', '/api/webauthn/login', async ({ req, res }) => {
+    const body = await readJson(req, 16384);
+    if (typeof body.id !== 'string' || !/^[A-Za-z0-9_-]+$/.test(body.id)) throw new HttpError(401, 'No se pudo verificar la huella.');
+    if (typeof body.clientDataJSON !== 'string') throw new HttpError(401, 'No se pudo verificar la huella.');
+    if (typeof body.authenticatorData !== 'string') throw new HttpError(401, 'No se pudo verificar la huella.');
+    if (typeof body.signature !== 'string') throw new HttpError(401, 'No se pudo verificar la huella.');
+
+    const passkey = getPasskey(db, body.id);
+    if (!passkey) throw new HttpError(401, 'No se pudo verificar la huella.');
+
+    const origin = expectedOrigin(req);
+    const rpId = new URL(origin).hostname;
+    let signCount: number;
+    try {
+      const result = verifyAssertion({
+        clientDataJSON: body.clientDataJSON,
+        authenticatorData: body.authenticatorData,
+        signature: body.signature,
+        publicKey: passkey.publicKey,
+        alg: passkey.alg,
+        storedCounter: passkey.counter,
+        origin,
+        rpId,
+        challenges: loginChallenges,
+      });
+      signCount = result.signCount;
+    } catch (err) {
+      if (err instanceof WebAuthnError) throw new HttpError(401, 'No se pudo verificar la huella.');
+      throw err;
+    }
+
+    updatePasskeyUsage(db, passkey.id, signCount);
+    const session = createSession(db, sessionDays);
+    sendJson(res, 200, { ok: true }, { 'Set-Cookie': cookie(session.token, sessionDays * 86400) });
+  });
+
+  const PUBLIC_API = new Set(['/api/session', '/api/login', '/api/webauthn/login-options', '/api/webauthn/login']);
 
   function checkOrigin(req: IncomingMessage): void {
     if (req.headers['x-webhub'] !== '1') throw new HttpError(403, 'Petición no permitida.');
