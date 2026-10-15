@@ -60,7 +60,7 @@ export function logAccess(
 ): void {
   try {
     const kind = entry.kind;
-    const protectedKind = kind === 'bloqueo' || kind === 'huella-alta' || kind === 'huella-baja';
+    const protectedKind = kind === 'bloqueo' || kind === 'huella-alta' || kind === 'huella-baja' || kind === 'pin-desactivado' || kind === 'pin-activado';
     const discardableFailure = !entry.ok && !protectedKind;
 
     if (discardableFailure) {

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import type { DatabaseSync } from 'node:sqlite';
 import { Router, HttpError, sendJson, readJson, parseCookies, clientIp, idParam, type Ctx } from './http.ts';
 import { Repo, InputError } from './repo.ts';
-import { LoginLimiter, PIN_MAX, createSession, deleteSession, getPinHash, isValidSession, verifySecret } from './auth.ts';
+import { LoginLimiter, PIN_MAX, createSession, deleteSession, getPinHash, isPinLoginEnabled, isValidSession, setPinLoginEnabled, verifySecret } from './auth.ts';
 import { LinkChecker } from './checker.ts';
 import { ChallengeStore, verifyRegistration, verifyAssertion, WebAuthnError } from './webauthn.ts';
 import { listPasskeys, getPasskey, countPasskeys, insertPasskey, updatePasskeyUsage, deletePasskey, getWebAuthnUserId } from './passkeys.ts';
@@ -70,10 +70,15 @@ export function createApp(opts: AppOptions): { server: Server; repo: Repo } {
   const api = new Router();
 
   api.on('GET', '/api/session', ({ req, res }) => {
-    sendJson(res, 200, { authenticated: authed(req), configured: getPinHash(db) !== null, passkeys: countPasskeys(db) > 0 });
+    sendJson(res, 200, { authenticated: authed(req), configured: getPinHash(db) !== null, passkeys: countPasskeys(db) > 0, pin: isPinLoginEnabled(db) });
   });
 
   api.on('POST', '/api/login', async ({ req, res, ip }) => {
+    if (!isPinLoginEnabled(db)) {
+      const ua = req.headers['user-agent'] ? String(req.headers['user-agent']) : undefined;
+      logAccess(db, { kind: 'pin', ok: false, ip, userAgent: ua, detail: 'PIN desactivado' });
+      throw new HttpError(403, 'La entrada con PIN está desactivada. Usa la huella.');
+    }
     const wait = limiter.retryAfter(ip);
     if (wait > 0) {
       throw new HttpError(429, `Demasiados intentos. Prueba de nuevo en ${Math.ceil(wait / 60)} min.`, { 'Retry-After': String(wait) });
@@ -102,6 +107,19 @@ export function createApp(opts: AppOptions): { server: Server; repo: Repo } {
   api.on('POST', '/api/logout', ({ req, res }) => {
     deleteSession(db, token(req));
     sendJson(res, 200, { ok: true }, { 'Set-Cookie': cookie('', 0) });
+  });
+
+  api.on('PUT', '/api/acceso/pin', async ({ req, res, ip }) => {
+    const body = await readJson(req, 4096);
+    if (typeof (body as { enabled?: unknown }).enabled !== 'boolean') throw new HttpError(400, 'Datos no válidos.');
+    const enabled = (body as { enabled: boolean }).enabled;
+    if (!enabled && countPasskeys(db) === 0) {
+      throw new HttpError(400, 'Registra antes una huella: sin huellas te quedarías sin forma de entrar.');
+    }
+    setPinLoginEnabled(db, enabled);
+    const ua = req.headers['user-agent'] ? String(req.headers['user-agent']) : undefined;
+    logAccess(db, { kind: enabled ? 'pin-activado' : 'pin-desactivado', ok: true, ip, userAgent: ua, detail: '' });
+    sendJson(res, 200, { pin: isPinLoginEnabled(db) });
   });
 
   // A partir de aquí, todo exige sesión (comprobado en handle()).
@@ -267,6 +285,9 @@ export function createApp(opts: AppOptions): { server: Server; repo: Repo } {
     const id = params.id ?? '';
     const passkey = getPasskey(db, id);
     if (!passkey) throw new HttpError(404, 'No encontrado.');
+    if (!isPinLoginEnabled(db) && countPasskeys(db) <= 1) {
+      throw new HttpError(409, 'No puedes borrar la última huella con el PIN desactivado. Reactiva antes el PIN.');
+    }
     deletePasskey(db, id);
     const ua = req.headers['user-agent'] ? String(req.headers['user-agent']) : undefined;
     logAccess(db, { kind: 'huella-baja', ok: true, ip, userAgent: ua, detail: passkey.name });

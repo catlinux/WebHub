@@ -36,10 +36,21 @@ export function getPinHash(db: DatabaseSync): string | null {
   return row?.value ?? null;
 }
 
+export function isPinLoginEnabled(db: DatabaseSync): boolean {
+  const row = db.prepare("SELECT value FROM settings WHERE key = 'pin_login'").get() as { value: string } | undefined;
+  return row?.value !== '0';
+}
+
+export function setPinLoginEnabled(db: DatabaseSync, enabled: boolean): void {
+  db.prepare("INSERT INTO settings (key, value) VALUES ('pin_login', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(enabled ? '1' : '0');
+}
+
 export async function setPin(db: DatabaseSync, pin: string): Promise<void> {
   if (!PIN_PATTERN.test(pin)) throw new Error(`El PIN debe tener de ${PIN_MIN} a ${PIN_MAX} dígitos (solo números).`);
   const hash = await hashSecret(pin);
   db.prepare("INSERT INTO settings (key, value) VALUES ('pin_hash', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(hash);
+  // Cambiar el PIN deja la entrada por PIN activada.
+  setPinLoginEnabled(db, true);
   // Cambiar el PIN cierra todas las sesiones.
   db.prepare('DELETE FROM sessions').run();
 }

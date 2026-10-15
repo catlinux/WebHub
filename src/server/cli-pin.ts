@@ -5,7 +5,7 @@
  */
 import { config } from './config.ts';
 import { openDatabase } from './db.ts';
-import { setPin, PIN_MIN, PIN_MAX } from './auth.ts';
+import { setPin, isPinLoginEnabled, PIN_MIN, PIN_MAX } from './auth.ts';
 
 function ask(prompt: string): Promise<string> {
   return new Promise((resolve) => {
@@ -51,8 +51,10 @@ if (first !== second) {
   process.exit(1);
 }
 try {
+  const estabaDesactivado = !isPinLoginEnabled(db);
   await setPin(db, first.trim());
   console.log(`PIN guardado en ${config.dataDir}. Se han cerrado todas las sesiones.`);
+  if (estabaDesactivado) console.log('La entrada con PIN estaba desactivada y se ha reactivado.');
 } catch (err) {
   console.error((err as Error).message);
   process.exit(1);
