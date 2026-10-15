@@ -2,9 +2,10 @@
 
 ## Pendiente
 
-- [ ] Entrada con huella (passkeys/WebAuthn) en el móvil, manteniendo el PIN como alternativa (versión 0.3.0).
 - [ ] Copia automática de `data/` en el VPS (temporizador con `VACUUM INTO`) y confirmar si la copia Borg
       del servidor incluye `/opt/contabo-apps/webhub/data`.
+- [ ] Comprobar la entrada con huella en un móvil real y en el dominio de producción, y anotar el
+      resultado en docs/despliegue.md.
 
 ## Pendiente de decidir
 

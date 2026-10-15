@@ -91,6 +91,36 @@ Comprobación:
 curl -I https://webhub.invierteconcriterio.es   # 200, Strict-Transport-Security, Content-Security-Policy…
 ```
 
+## Entrada con huella
+
+La entrada con huella usa passkeys (WebAuthn) y permite entrar con la huella, cara o
+Windows Hello del dispositivo. El PIN se mantiene como alternativa y para dar de alta
+cada dispositivo nuevo.
+
+**Requisitos:** HTTPS y `WEBHUB_PUBLIC_ORIGIN` definido con el origen exacto (p. ej.
+`https://webhub.invierteconcriterio.es`). WebAuthn exige HTTPS (o `localhost`) y las
+huellas quedan atadas al dominio (rpId = host de `WEBHUB_PUBLIC_ORIGIN`). Si
+`WEBHUB_PUBLIC_ORIGIN` no está definido, el origen se deduce de la cabecera `Host` (solo
+desarrollo); en producción debe definirse.
+
+**Si cambia el dominio:** las huellas dejan de funcionar, porque están atadas al dominio.
+Hay que volver a activarlas en cada dispositivo (entran con PIN y las vuelven a dar de
+alta).
+
+**Cómo se activa:** tras entrar con PIN en un dispositivo compatible sin huella aparece el
+aviso «¿Entrar con huella en este dispositivo?» con «Activar» y «Ahora no» (se recuerda el
+«Ahora no»); también se puede activar desde Administrar › Acceso, con un nombre editable
+para el dispositivo. En la pantalla de entrada aparece el botón «Entrar con huella» (con el
+separador «o con el PIN») cuando el servidor tiene huellas y el dispositivo las admite; en
+móvil, si el dispositivo ya la tiene activada, se lanza sola al abrir.
+
+**Si se pierde un dispositivo:** borrar su huella desde Administrar › Acceso (con
+confirmación) y seguir entrando con el PIN.
+
+**Copias de seguridad:** las huellas viven en la base de datos SQLite
+(`data/webhub.sqlite`), así que las copias de la base las incluyen. La exportación JSON de
+la web (Administrar › Copia de seguridad) no las incluye.
+
 ## 6. Copias de seguridad
 
 - **Desde la web**: Administrar › Copia de seguridad › Descargar copia (JSON). Incluye familias, enlaces,
@@ -160,6 +190,20 @@ emulado, importador con archivos de ejemplo, comprobador contra un servidor loca
 comprobó en este VPS con Chromium real, en una instancia aparte con datos temporales: plegar bloques y recordarlo al recargar, tooltip, arrastrar
 bloques (sin mezclar niveles), cambio de fondo y recuerdo del aspecto; no se ha probado en móvil físico ni
 en Firefox/Safari.
+
+**Entrada con huella (0.3.0), comprobado:** 118 tests automáticos pasan (los de verificación
+criptográfica generan claves reales P-256, RSA y Ed25519 con `node:crypto` y se comprobó con
+mutaciones que detectan cada comprobación de seguridad rota; los de la API cubren registro,
+entrada, reto reutilizado o cruzado, firma ajena, contador, bloqueo del PIN, listado, borrado y
+exportación) y una prueba de extremo a extremo en Chromium real con autenticador virtual WebAuthn en
+este VPS (instancia aparte con datos temporales en `http://localhost`): activar desde el aviso, entrar
+con huella con firma real verificada por el servidor, contador que sube, arranque automático en un
+contexto móvil táctil, la pestaña Acceso (lista, activar, borrar) y que sin huellas vuelve a mostrarse
+solo el PIN.
+
+**Entrada con huella (0.3.0), no comprobado:** una huella real en un móvil físico ni Windows Hello
+real, Safari ni Firefox, el dominio de producción con HTTPS (pendiente de que lo confirme el usuario) ni
+que el aviso se muestre bien en todos los navegadores móviles.
 
 **No probado:**
 

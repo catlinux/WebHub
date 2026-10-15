@@ -35,6 +35,8 @@ Uso personal, un solo usuario. Toda la aplicación (también la lista de enlaces
 - **Pestaña «Aspecto»** en Administrar para elegir el fondo del área central
   (Liso, Cuadrícula, Puntos, Resplandor, Aurora), color e intensidad, con vista
   previa y Restablecer; se guarda por dispositivo.
+- **Entrada con huella** mediante passkeys (WebAuthn): huella, cara o Windows
+  Hello del dispositivo; el PIN se mantiene como alternativa.
 
 WebHub **no guarda contraseñas ni secretos** de ningún tipo (ver [TODO.md](TODO.md)).
 
@@ -67,7 +69,7 @@ Por variables de entorno:
 | `WEBHUB_PORT` | `3000` | Puerto. |
 | `WEBHUB_DATA_DIR` | `./data` | Carpeta de la base de datos SQLite. |
 | `WEBHUB_TRUST_PROXY` | (vacío) | `1` detrás del proxy inverso: usa la IP de `X-Forwarded-For` para el límite de intentos. |
-| `WEBHUB_PUBLIC_ORIGIN` | (vacío) | p. ej. `https://webhub.ejemplo.com`. Si se define, las peticiones de escritura deben venir de ese origen. |
+| `WEBHUB_PUBLIC_ORIGIN` | (vacío) | p. ej. `https://webhub.ejemplo.com`. Si se define, las peticiones de escritura deben venir de ese origen. Además fija el origen y el dominio (rpId) de las huellas; en producción debe definirse. |
 | `WEBHUB_SESSION_DAYS` | `30` | Duración de la sesión. |
 | `WEBHUB_INSECURE_COOKIE` | (vacío) | `1` quita el atributo `Secure` de la cookie (solo desarrollo). |
 
@@ -76,6 +78,10 @@ Por variables de entorno:
 - Acceso con un **PIN de 6 a 12 dígitos**, guardado como hash **scrypt** con sal; se crea o cambia por terminal
   (`npm run pin`) y cambiarlo cierra todas las sesiones.
 - Sesión por cookie `HttpOnly`, `Secure` y `SameSite=Strict`; en la base de datos solo se guarda el hash del token.
+- **Passkeys (huellas):** el servidor solo guarda la clave pública (más id de credencial, algoritmo,
+  contador, nombre y fechas); la huella nunca sale del dispositivo. La verificación de usuario (UV) es
+  obligatoria. Las huellas quedan atadas al dominio (rpId) y no pasan por el bloqueo escalonado del PIN.
+  El PIN se mantiene como alternativa y para dar de alta cada dispositivo.
 - Límite de intentos pensado para un PIN: 5 fallos por IP en 15 minutos y, además, un **bloqueo global escalonado**:
   cada 10 fallos seguidos (vengan de las IP que vengan) se bloquea el acceso 15 min, luego 30 min, 1 h… hasta 24 h.
   Tras un día de ataque solo se admiten unos 10 intentos diarios: probar un millón de PIN llevaría siglos.

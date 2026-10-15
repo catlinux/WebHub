@@ -4,6 +4,45 @@ Todos los cambios relevantes de WebHub se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/)
 y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [0.3.0] - 2026-10-15
+
+### Añadido
+
+- Entrada con huella mediante passkeys (WebAuthn): huella, cara o Windows Hello del dispositivo.
+  La huella no sale del dispositivo; el servidor solo guarda la clave pública (más id de
+  credencial, algoritmo, contador, nombre y fechas). Sin dependencias nuevas (APIs del
+  navegador y `node:crypto`). Algoritmos ES256, RS256 y EdDSA. El PIN se mantiene como
+  alternativa y para dar de alta cada dispositivo.
+- Botón «Entrar con huella» (con separador «o con el PIN») en la pantalla de entrada
+  cuando el servidor tiene huellas y el dispositivo las admite; en móvil, si el dispositivo
+  ya la tiene activada (marca en `localStorage`), se lanza sola al abrir y, si el navegador
+  lo impide, queda el botón.
+- Aviso «¿Entrar con huella en este dispositivo?» con «Activar» y «Ahora no» (se recuerda
+  el «Ahora no») tras entrar con PIN en un dispositivo compatible sin huella.
+- Pestaña nueva «Acceso» en Administrar: lista de dispositivos (nombre, alta, último uso),
+  borrado con confirmación, activación en este dispositivo con nombre editable y nota de
+  cómo cambiar el PIN.
+- Rutas públicas `/api/webauthn/login-options` y `/api/webauthn/login`; rutas de gestión
+  `/api/webauthn/register-options`, `/register`, `/credentials` (GET y DELETE `/:id`).
+  Máximo 10 huellas.
+
+### Cambiado
+
+- `GET /api/session` devuelve además `passkeys` (booleano).
+- Tabla `passkeys` (migración 2 de la base de datos), aplicada sola al arrancar; cambio de
+  esquema compatible.
+
+### Seguridad
+
+- Reto aleatorio de un solo uso que caduca a los 2 minutos, guardado en memoria en almacenes
+  separados para registro y entrada; se comprueban tipo, reto, origin, hash del rpId, presencia
+  (UP) y verificación de usuario (UV) obligatorias, firma y contador (si retrocede se rechaza
+  por posible clon); mensajes de error genéricos hacia el cliente.
+- Las huellas no pasan por el bloqueo escalonado del PIN (no se pueden adivinar), por lo que
+  bloquear el PIN no impide entrar con la huella.
+- La exportación JSON no incluye las huellas; las huellas quedan atadas al dominio
+  (rpId = host de `WEBHUB_PUBLIC_ORIGIN`).
+
 ## [0.2.0] - 2026-10-15
 
 ### Añadido
