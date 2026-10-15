@@ -30,11 +30,18 @@ Uso personal, un solo usuario. Toda la aplicación (también la lista de enlaces
   nivel; en pantallas táctiles se usa ↑↓ en Administrar › Organizar.
 - **Bloques plegables** con flecha ▾; el contador sigue visible y el estado se
   recuerda por dispositivo.
+- **Familias plegadas por defecto**: casilla en el diálogo de familia para que
+  aparezca con sus enlaces ocultos (título y contador); la marca se guarda en el
+  servidor y la preferencia manual de cada persona prevalece.
 - **Tooltip propio** con título, URL, nota, etiquetas y número de aperturas, en
   lugar del tooltip nativo del navegador; no aparece en pantallas táctiles.
-- **Pestaña «Aspecto»** en Administrar para elegir el fondo del área central
-  (Liso, Cuadrícula, Puntos, Resplandor, Aurora), color e intensidad, con vista
-  previa y Restablecer; se guarda por dispositivo.
+- **Pestaña «Aspecto»** en Administrar con vista previa al instante: tema
+  (Oscuro, Alto contraste, Claro); tamaño del texto (80 % a 200 %); fuente del
+  sistema (Sistema, Verdana, Humanista, Con serifa, Monoespaciada); densidad de
+  filas; títulos de familia (tamaño, peso, mayúsculas y color propios); color de
+  acento; mostrar u ocultar el dominio; fondo del área central (Liso,
+  Cuadrícula, Puntos, Resplandor, Aurora) con color e intensidad; y Restablecer
+  todo. Se guarda en el servidor y vale en todos los dispositivos.
 - **Entrada con huella** mediante passkeys (WebAuthn): huella, cara o Windows
   Hello del dispositivo; el PIN se mantiene como alternativa.
 
@@ -44,6 +51,7 @@ WebHub **no guarda contraseñas ni secretos** de ningún tipo (ver [TODO.md](TOD
 
 - Node.js **22.18 o superior** (ejecuta TypeScript directamente y trae SQLite integrado).
 - Nada más en producción: cero dependencias de ejecución. `esbuild`, `typescript` y `@types/node` solo se usan para compilar.
+- **Navegador de 2023 en adelante** para la interfaz (Chrome/Edge 111, Firefox 113, Safari 16.2 o superiores): los temas y colores usan `color-mix()` de CSS.
 
 ## Puesta en marcha (local)
 

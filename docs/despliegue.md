@@ -141,7 +141,7 @@ docker compose run --rm build
 docker compose restart webhub
 ```
 
-Las migraciones de la base de datos se aplican solas al arrancar. Para usar un Node más nuevo:
+Las migraciones de la base de datos se aplican solas al arrancar. La migración 3 y el cambio de dónde se guarda el aspecto se aplican solos al reiniciar. Para usar un Node más nuevo:
 `docker compose pull && docker compose up -d`.
 
 ## Salida a Internet del servidor
@@ -204,6 +204,17 @@ solo el PIN.
 **Entrada con huella (0.3.0), no comprobado:** una huella real en un móvil físico ni Windows Hello
 real, Safari ni Firefox, el dominio de producción con HTTPS (pendiente de que lo confirme el usuario) ni
 que el aviso se muestre bien en todos los navegadores móviles.
+
+**Aspecto y familias plegadas por defecto (0.4.0), comprobado:** 149 tests automáticos pasan
+(validación estricta del aspecto con casos de inyección de CSS, API del aspecto, marca de familias en
+la API, copia y restauración); pruebas de extremo a extremo en Chromium real en este VPS (instancia
+aparte con datos temporales): plegado por defecto, desplegar y recordarlo, edición de la casilla en el
+diálogo, todos los controles de la pestaña Aspecto, persistencia tras recargar y desde otro navegador, y
+Restablecer; además 18 capturas de pantalla (escritorio, móvil y tablet) comparadas píxel a píxel con
+las anteriores a la conversión a rem, sin diferencias visibles.
+
+**Aspecto y familias plegadas por defecto (0.4.0), no comprobado:** el aspecto en un móvil físico, en
+Safari ni Firefox, y en producción (pendiente de que lo confirme el usuario).
 
 **No probado:**
 

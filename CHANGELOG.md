@@ -4,6 +4,45 @@ Todos los cambios relevantes de WebHub se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/)
 y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [0.4.0] - 2026-10-15
+
+### Añadido
+
+- Familias plegadas por defecto: casilla «Mostrar sus enlaces plegados por defecto» en el diálogo
+  de crear o editar una familia o subfamilia. Esa familia aparece con sus enlaces ocultos (solo
+  título y contador) en «Todos» y en su vista, y se despliega con la flecha ▾. Lo que cada
+  persona pliega o despliega a mano se recuerda en ese navegador y prevalece sobre la marca. La
+  marca se guarda en el servidor, forma parte de la copia de seguridad JSON (las copias antiguas
+  sin el campo se restauran como no plegadas; el formato sigue siendo 1) y la base de datos añade
+  una columna (migración 3, automática al arrancar).
+- Pestaña «Aspecto» en Administrar con vista previa al instante: tema (Oscuro, Alto contraste,
+  Claro); tamaño del texto de toda la aplicación (80 % a 200 %); fuente (Sistema, Verdana,
+  Humanista, Con serifa, Monoespaciada; fuentes del sistema, sin descargas); densidad de las filas
+  (Compacta, Normal, Cómoda); títulos de familia (tamaño del 100 % al 220 %, peso
+  Normal/Seminegrita/Negrita/Extranegrita, mayúsculas sí o no y color propio); color de acento;
+  mostrar u ocultar el dominio junto a cada enlace; fondo del área central (Liso, Cuadrícula,
+  Puntos, Resplandor, Aurora, con color e intensidad) y «Restablecer todo». Pensado para quien
+  necesita letra más grande o más contraste.
+- Rutas `GET` y `PUT /api/aspecto`, que exigen sesión. El aspecto se guarda en el servidor
+  (ajuste `aspecto` en la base de datos) y vale igual en todos los dispositivos.
+
+### Cambiado
+
+- El fondo del área central, que en la 0.2.0 se guardaba en cada navegador, ahora se guarda en el
+  servidor: hay que volver a elegirlo una vez.
+- Los títulos de familia son por defecto algo más grandes (120 %) y en negrita.
+- Todas las medidas de la hoja de estilos pasan de píxeles a rem, para que el tamaño del texto
+  escale con todo (a 100 % el aspecto es idéntico al anterior).
+- El título y el contador de la barra superior ya no se encogen con textos grandes.
+- Los temas y colores usan `color-mix()` de CSS, por lo que requieren un navegador de 2023 en
+  adelante (Chrome o Edge 111, Firefox 113, Safari 16.2).
+- Migración 3 de la base de datos, aplicada sola al arrancar; cambio de esquema compatible.
+
+### Seguridad
+
+- Validación estricta del aspecto en el servidor: listas cerradas, números acotados y colores
+  `#rrggbb`; solo se guarda lo saneado.
+
 ## [0.3.0] - 2026-10-15
 
 ### Añadido
