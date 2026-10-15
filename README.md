@@ -8,6 +8,18 @@ ordenados por familias, localizables al instante y en una sola pestaña ligera e
 Uso personal, un solo usuario. Toda la aplicación (también la lista de enlaces) exige entrar con un **PIN**
 (sin usuario ni contraseña).
 
+## Capturas
+
+Las capturas usan datos de ejemplo inventados (dominios `.example`); ninguna contiene enlaces reales.
+
+![Vista «Todos» en tema oscuro, con las familias repartidas en columnas](docs/img/todos-oscuro.png)
+
+| | |
+|---|---|
+| ![Tema claro con letra más grande](docs/img/todos-claro.png)<br>Tema claro y letra más grande | ![Vista en el móvil](docs/img/movil.png)<br>Una columna en el móvil |
+| ![Pantalla de entrada con huella o PIN](docs/img/entrada.png)<br>Entrada con huella o con PIN | ![Pestaña Aspecto del panel de administración](docs/img/aspecto.png)<br>Aspecto configurable: tema, texto, fuente y títulos |
+| ![Registro de accesos](docs/img/acceso.png)<br>Huellas y registro de accesos | ![Comprobador de enlaces](docs/img/comprobador.png)<br>Comprobador de enlaces |
+
 ## Funciones
 
 - **Familias y subfamilias** en una barra lateral fija con el número de enlaces de cada una.

@@ -4,6 +4,16 @@ Todos los cambios relevantes de WebHub se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/)
 y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [0.5.2] - 2026-10-15
+
+### Añadido
+
+- Capturas de pantalla en el README (`docs/img/`), hechas con datos de ejemplo inventados: ningún enlace real.
+
+### Corregido
+
+- En Administrar › Aspecto, los selectores de color («Color de acento» y color de los títulos) ocupaban toda la fila; ahora tienen un tamaño normal.
+
 ## [0.5.1] - 2026-10-15
 
 ### Seguridad

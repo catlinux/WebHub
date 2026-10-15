@@ -2,9 +2,6 @@
 
 ## Pendiente
 
-- [ ] Ocultar el dominio real en el repositorio (docker-compose.yml y guía de
-      despliegue) o hacerlo privado, ya que el dominio sale en el historial
-      público.
 - [ ] Copia automática de `data/` en el VPS (temporizador con `VACUUM INTO`) y confirmar si la copia Borg
       del servidor incluye `/opt/contabo-apps/webhub/data`.
 - [ ] Comprobar la entrada con huella en un móvil real y en el dominio de producción, y anotar el
@@ -13,6 +10,11 @@
 - [ ] Comprobar el registro de accesos, el modo solo huella, el comprobador y las columnas en un móvil real y en producción.
 
 ## Pendiente de decidir
+
+- [ ] Dominio real en el repositorio público (docker-compose.yml y guía de despliegue). Decidido el
+      2026-10-15: el repositorio sigue público; lo que nunca debe salir son los enlaces ni los datos del
+      usuario (bases de datos, copias, capturas con datos reales). Opcional: sustituir el dominio real por
+      uno de ejemplo.
 
 - [ ] Campo «Referencia KeePassXC» por enlace (solo texto con la ruta de la entrada, p. ej. `Proveedores/OVH`,
       con botón de copiar). Nunca guardar secretos en WebHub. Decidido aplazarlo en la v0.1.0.

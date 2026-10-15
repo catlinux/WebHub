@@ -304,6 +304,7 @@ img.fav { background: var(--fav-bg); padding: 0.0625rem; object-fit: contain; }
 .ajustes-fondo input[type="color"] { width: 3rem; height: 1.75rem; padding: 0; background: none; border: 1px solid var(--line); border-radius: 0.3125rem; }
 .fila-rango { display: flex; align-items: center; gap: .6rem; }
 .fila-rango input { flex: 1; accent-color: var(--accent); }
+.fila-rango input[type="color"] { flex: none; width: 3rem; height: 1.75rem; padding: 0; }
 
 /* ---------- Diálogos ---------- */
 dialog {

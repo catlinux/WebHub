@@ -170,8 +170,9 @@ protección real es el PIN o la huella. El nombre del dominio puede
 descubrirse por otras vías: los registros públicos de certificados de Let's
 Encrypt publican cada nombre de dominio con certificado (un certificado
 comodín los oculta) y, si el repositorio es público, los nombres de dominio que
-aparecen en la guía y en `docker-compose.yml` también. Por eso conviene
-mantener el repositorio privado.
+aparecen en la guía y en `docker-compose.yml` también. Si no quieres que se
+descubra, sustitúyelo por un dominio de ejemplo en esos archivos. En cualquier caso, nunca se suben
+enlaces ni datos reales: `data/` y las copias de la base de datos están en `.gitignore`.
 
 Comprobación: `curl -sI https://tu-dominio/ | grep -i x-robots` y
 `curl https://tu-dominio/robots.txt`.
