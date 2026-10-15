@@ -6,11 +6,12 @@ import { dropReorder, moveItem } from '../shared/order.ts';
 import { classify } from '../shared/check.ts';
 import { FONDOS, ASPECTO_INICIAL, type Aspecto } from '../shared/aspecto.ts';
 import { cargarAspecto, guardarAspecto, aplicarAspecto } from './aspecto.ts';
+import { passkeysSupported, platformAvailable, registerPasskey, defaultDeviceName, markDevicePasskey } from './passkeys.ts';
 import type { ImportPlan, PlanGroup } from '../shared/bookmarks.ts';
 import type { Family, Link } from '../shared/types.ts';
 
 type Reload = () => Promise<void>;
-type Tab = 'organizar' | 'importar' | 'copia' | 'comprobar' | 'aspecto';
+type Tab = 'organizar' | 'importar' | 'copia' | 'comprobar' | 'aspecto' | 'acceso';
 
 const TABS: [Tab, string][] = [
   ['organizar', 'Organizar'],
@@ -18,6 +19,7 @@ const TABS: [Tab, string][] = [
   ['copia', 'Copia de seguridad'],
   ['comprobar', 'Enlaces rotos'],
   ['aspecto', 'Aspecto'],
+  ['acceso', 'Acceso'],
 ];
 
 export function renderAdmin(content: HTMLElement, tab: Tab, reload: Reload): void {
@@ -35,6 +37,7 @@ export function renderAdmin(content: HTMLElement, tab: Tab, reload: Reload): voi
   else if (tab === 'importar') renderImport(body, reload);
   else if (tab === 'copia') renderBackup(body, reload);
   else if (tab === 'aspecto') renderAspecto(body, content);
+  else if (tab === 'acceso') renderAcceso(body);
   else renderChecker(body, reload);
 }
 
@@ -636,4 +639,146 @@ function renderAspecto(container: HTMLElement, area: HTMLElement): void {
     ),
   );
   pintar();
+}
+
+// ================================================================ Acceso (passkeys / huellas)
+
+function fechaLocal(iso: string): string {
+  return new Date(iso).toLocaleString('es-ES');
+}
+
+function renderAcceso(container: HTMLElement): void {
+  interface Credencial { id: string; name: string; createdAt: string; lastUsedAt: string | null }
+
+  let creds: Credencial[] = [];
+  let loading = true;
+  let loadError: string | null = null;
+
+  const listWrap = h('div');
+  const activationWrap = h('div');
+
+  const drawList = () => {
+    clear(listWrap);
+    if (loading) {
+      listWrap.append(h('p', { class: 'ayuda', text: 'Cargando…' }));
+      return;
+    }
+    if (loadError) {
+      listWrap.append(h('p', { class: 'error', text: loadError }));
+      return;
+    }
+    if (creds.length === 0) {
+      listWrap.append(h('p', { class: 'ayuda', text: 'Todavía no hay ninguna huella registrada.' }));
+      return;
+    }
+    for (const c of creds) {
+      const btn = h('button', {
+        class: 'btn peligro',
+        text: 'Borrar',
+        attrs: { type: 'button' },
+        on: {
+          click: () => {
+            confirmDialog(
+              'Borrar huella',
+              `¿Borrar la huella «${c.name}»?`,
+              'Borrar',
+              async () => {
+                try {
+                  await api('DELETE', `/api/webauthn/credentials/${encodeURIComponent(c.id)}`);
+                  await loadCreds();
+                  if (creds.length === 0) markDevicePasskey(false);
+                  toast('Huella borrada.');
+                } catch (err) {
+                  toast((err as Error).message, true);
+                }
+              },
+            );
+          },
+        },
+      });
+      const row = h(
+        'div',
+        { class: 'fila-admin' },
+        h('span', { class: 'texto', text: c.name }),
+        h('span', { class: 'secundario', text: `Alta: ${fechaLocal(c.createdAt)}` }),
+        h('span', { class: 'secundario', text: `Último uso: ${c.lastUsedAt ? fechaLocal(c.lastUsedAt) : 'nunca'}` }),
+        h('span', { class: 'acc' }, btn),
+      );
+      listWrap.append(row);
+    }
+  };
+
+  const loadCreds = async () => {
+    loading = true;
+    loadError = null;
+    drawList();
+    try {
+      creds = await api<Credencial[]>('GET', '/api/webauthn/credentials');
+    } catch (err) {
+      loadError = (err as Error).message;
+      toast(loadError, true);
+      creds = [];
+    } finally {
+      loading = false;
+      drawList();
+    }
+  };
+
+  clear(
+    container,
+    h(
+      'div',
+      { class: 'seccion' },
+      h('h3', { text: 'Entrada con huella' }),
+      h('p', {
+        class: 'ayuda',
+        text: `La huella (o cara, o Windows Hello) se queda en el dispositivo y el servidor solo guarda una clave pública; el PIN sigue valiendo y sirve para dar de alta cada dispositivo nuevo; las huellas quedan atadas al dominio actual (${location.hostname}).`,
+      }),
+      listWrap,
+      activationWrap,
+      h('p', {
+        class: 'ayuda',
+        text: 'El PIN se cambia en el servidor con «npm run pin» (con Docker: docker compose run --rm webhub npm run pin). Al cambiarlo se cierran todas las sesiones, pero las huellas siguen valiendo.',
+      }),
+    ),
+  );
+
+  // Se comprueba soporte antes de mostrar el botón de activación.
+  void (async () => {
+    const supported = passkeysSupported() && (await platformAvailable());
+    clear(activationWrap);
+    if (!supported) {
+      activationWrap.append(h('p', { class: 'ayuda', text: 'Este navegador o dispositivo no admite entrar con huella. Usa el PIN.' }));
+      return;
+    }
+    const nameInput = h('input', {
+      class: 'campo',
+      attrs: { type: 'text', value: defaultDeviceName(), maxlength: 60, 'aria-label': 'Nombre del dispositivo' },
+    });
+    const activateBtn = h('button', {
+      class: 'btn primario',
+      text: 'Activar huella en este dispositivo',
+      attrs: { type: 'button' },
+    });
+    activateBtn.addEventListener('click', async () => {
+      const nombre = nameInput.value.trim();
+      if (!nombre) {
+        toast('Pon un nombre al dispositivo.', true);
+        return;
+      }
+      activateBtn.disabled = true;
+      try {
+        await registerPasskey(nombre);
+        toast('Huella activada.');
+        await loadCreds();
+      } catch (err) {
+        toast((err as Error).message, true);
+      } finally {
+        activateBtn.disabled = false;
+      }
+    });
+    activationWrap.append(nameInput, h('p', null, activateBtn));
+  })();
+
+  void loadCreds();
 }
