@@ -1,0 +1,16 @@
+# Bloque de ejemplo para el Caddyfile del VPS. Cambia el dominio.
+webhub.ejemplo.com {
+	encode zstd gzip
+
+	# Caddy añade X-Forwarded-For con la IP real del cliente y conserva Host.
+	reverse_proxy 127.0.0.1:3000
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+
+	# Opcional, capa extra: limitar el acceso a tus IP o a una VPN.
+	# @fuera not remote_ip 203.0.113.10 10.8.0.0/24
+	# respond @fuera 403
+}
