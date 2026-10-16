@@ -7,9 +7,10 @@ html { font-size: calc(16px * var(--escala, 1)); }
   --line: #1c2733;
   --text: #d6e2ea;
   --muted: #7a8a98;
-  --faint: #546372;
+  --faint: #7589a0;
   --accent: var(--acento-usuario, #3fe0c5);
   --accent-dim: color-mix(in srgb, var(--accent) 45%, var(--bg));
+  --accent-texto: color-mix(in srgb, var(--accent) 72%, var(--bg));
   --accent-bg: color-mix(in srgb, var(--accent) 9%, transparent);
   --on-accent: #062420;
   --fav-bg: #e6edf1;
@@ -40,6 +41,7 @@ html { font-size: calc(16px * var(--escala, 1)); }
   --faint: #bdbdbd;
   --accent: var(--acento-usuario, #ffe14d);
   --accent-dim: color-mix(in srgb, var(--accent) 45%, var(--bg));
+  --accent-texto: color-mix(in srgb, var(--accent) 72%, var(--bg));
   --accent-bg: color-mix(in srgb, var(--accent) 9%, transparent);
   --on-accent: #000;
   --danger: #ff8a8a;
@@ -54,9 +56,10 @@ html { font-size: calc(16px * var(--escala, 1)); }
   --line: #d0d7de;
   --text: #1f2328;
   --muted: #57606a;
-  --faint: #6e7781;
-  --accent: var(--acento-usuario, #0b7d6e);
+  --faint: #5f6872;
+  --accent: var(--acento-usuario, #0a7365);
   --accent-dim: color-mix(in srgb, var(--accent) 45%, var(--bg));
+  --accent-texto: color-mix(in srgb, var(--accent) 100%, var(--bg));
   --accent-bg: color-mix(in srgb, var(--accent) 9%, transparent);
   --on-accent: #ffffff;
   --fav-bg: #ffffff;
@@ -178,7 +181,7 @@ label.etiqueta { display: block; margin: .6rem 0 .2rem; color: var(--muted); fon
 .nav-item.activo { background: var(--accent-bg); color: var(--accent); }
 .nav-item .nombre { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nav-item .num { color: var(--faint); font-size: 0.71875rem; font-variant-numeric: tabular-nums; }
-.nav-item.activo .num { color: var(--accent-dim); }
+.nav-item.activo .num { color: var(--accent-texto); }
 .nav-item.sub { padding-left: 1.45rem; height: 1.5625rem; color: var(--muted); }
 .nav-item.sub.activo { color: var(--accent); }
 .nav-item.destino { outline: 1px dashed var(--accent); background: var(--accent-bg); }
@@ -220,13 +223,13 @@ html[data-dominio="no"] .dominio { display: none; }
 .plegar {
   display: inline-grid; place-items: center; width: 1.125rem; height: 1.125rem; flex: none; align-self: center;
   margin-right: -.1rem; padding: 0; background: none; border: 0; border-radius: 0.25rem;
-  color: var(--accent-dim); cursor: pointer; font-size: 0.75rem; transition: transform .12s, color .12s;
+  color: var(--accent-texto); cursor: pointer; font-size: 0.75rem; transition: transform .12s, color .12s;
 }
 .plegar:hover { color: var(--accent); background: var(--accent-bg); }
 .plegar:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .bloque.plegado .plegar { transform: rotate(-90deg); }
 .bloque.plegado h3 { border-bottom-color: transparent; }
-@media (pointer: coarse) { .plegar { width: 1.75rem; height: 1.75rem; font-size: 0.9375rem; } }
+@media (pointer: coarse) { .plegar { width: 2.75rem; height: 2.75rem; font-size: 0.9375rem; } }
 .bloque h3 a:hover { text-decoration: underline; }
 .bloque h3 .num { color: var(--faint); font-weight: 400; }
 .lista { list-style: none; margin: 0; padding: 0; }
@@ -251,7 +254,7 @@ img.fav { background: var(--fav-bg); padding: 0.0625rem; object-fit: contain; }
 }
 .nota { color: var(--muted); font-style: italic; flex-shrink: 20; }
 .nota::before { content: "· "; color: var(--faint); font-style: normal; }
-.familia-tag { color: var(--accent-dim); }
+.familia-tag { color: var(--accent-texto); }
 .estrella { visibility: hidden; flex: none; }
 .fila:hover .estrella, .estrella.on { visibility: visible; }
 .estrella.on { color: var(--accent); }
@@ -397,8 +400,8 @@ p.error { color: var(--warn); max-width: 80ch; }
   .ayuda-raton, .fila-admin .asa { display: none; }
   .ayuda-tactil { display: block; }
   .fila-admin .acc { opacity: 1; }
-  .fila-admin .icono-btn { width: 2.125rem; height: 2.125rem; font-size: 0.9375rem; }
-  .fila-admin { min-height: 2.5rem; }
+  .fila-admin .icono-btn { width: 2.75rem; height: 2.75rem; font-size: 0.9375rem; }
+  .fila-admin { min-height: 2.75rem; }
 }
 .ayuda { color: var(--muted); font-size: 0.78125rem; margin: .2rem 0 .8rem; max-width: 70ch; }
 .seccion { max-width: 53.75rem; }
@@ -420,7 +423,7 @@ p.error { color: var(--warn); max-width: 80ch; }
 .chip.privado { color: var(--muted); border-color: var(--line); }
 .chip.protegido { color: var(--muted); border-color: var(--line); }
 .chip-boton { display: inline-flex; align-items: center; padding: .2rem .65rem; border-radius: 6.1875rem; font-size: 0.8125rem; border: 1px solid var(--line); color: var(--text); background: var(--panel-2); cursor: pointer; }
-@media (pointer: coarse) { .chip-boton { padding: .4rem .8rem; } }
+@media (pointer: coarse) { .chip-boton { padding: .4rem .8rem; min-height: 2.75rem; min-width: 2.75rem; } }
 .chip-boton:hover { border-color: var(--accent-dim); }
 .chip-boton:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .chip-boton[aria-pressed="true"] { color: var(--accent); border-color: var(--accent-dim); background: var(--accent-bg); }
@@ -433,6 +436,20 @@ table.tabla { width: 100%; border-collapse: collapse; font-size: 0.78125rem; }
 .tabla th { color: var(--muted); font-weight: 500; }
 .tabla td.url { max-width: 20rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--faint); }
 
+/* ---------- Táctil ---------- */
+@media (pointer: coarse) {
+  :root { --row: max(var(--row-base), 2.75rem); }
+  .nav-item { min-height: 2.75rem; }
+  .btn { min-height: 2.75rem; min-width: 2.75rem; }
+  .icono-btn, .estrella, .menu-btn { min-width: 2.75rem; min-height: 2.75rem; }
+  .chip-boton { min-height: 2.75rem; min-width: 2.75rem; }
+  .pestanas a { min-height: 2.75rem; display: inline-flex; align-items: center; justify-content: center; }
+  .opcion-fondo { min-height: 2.75rem; min-width: 2.75rem; }
+  .opcion-fuente { min-height: 2.75rem; min-width: 2.75rem; display: inline-flex; align-items: center; justify-content: center; }
+  .campo, select { min-height: 2.75rem; min-width: 2.75rem; }
+  .fila { min-height: 2.75rem; }
+  .link { min-height: 2.75rem; }
+}
 /* ---------- Móvil ---------- */
 .velo { display: none; }
 @media (max-width: 940px) {
