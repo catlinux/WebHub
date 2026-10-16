@@ -442,16 +442,160 @@ function renderBackup(container: HTMLElement, reload: Reload): void {
           click: () =>
             confirmDialog(
               'Restaurar copia',
-              `Se borrarán las ${state.families.length} familias y ${state.links.length} enlaces actuales y se sustituirán por los de la copia. Si dudas, descarga antes una copia de lo actual.`,
+              `Se borrarán las ${state.families.length} familias y ${state.links.length} enlaces actuales y se sustituirán por los de la copia. Si dudas, descarga antes una copia de lo actual. Antes de restaurar se hace una copia automática de lo actual.`,
               'Sustituir todo',
-              () => run(() => api('POST', '/api/import/json', { data, confirm: 'SUSTITUIR' }), reload, 'Copia restaurada.'),
+              async () => {
+                let result: { copiaPrevia?: string } | undefined;
+                let ok = false;
+                await run(async () => {
+                  result = await api<{ families: number; links: number; copiaPrevia?: string }>('POST', '/api/import/json', { data, confirm: 'SUSTITUIR' });
+                  ok = true;
+                }, reload);
+                if (ok) {
+                  if (result?.copiaPrevia) toast(`Copia restaurada. Copia previa guardada: ${result.copiaPrevia}.`);
+                  else toast('Copia restaurada.');
+                }
+              },
             ),
         },
       }),
     );
   });
+
+  type CopiaItem = { archivo: string; tipo: 'diaria' | 'manual' | 'antes-de-restaurar'; fecha: string; bytes: number };
+  type CopiasActivas = {
+    activa: true;
+    carpeta: string;
+    ultimaOk: string | null;
+    ultimoError: string | null;
+    total: number;
+    horasDesdeUltima: number | null;
+    aviso: boolean;
+    archivoEstable: { archivo: string; tipo: string; fecha: string; bytes: number } | null;
+    copias: CopiaItem[];
+  };
+  type EstadoCopias = { activa: false } | CopiasActivas;
+
+  const autoSection = h('div', { class: 'seccion' });
+
+  let copiasEstado: EstadoCopias | null = null;
+  let copiasLoading = false;
+  let copiasError: string | null = null;
+
+  function tamanoLegible(bytes: number): string {
+    if (bytes >= 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    return (bytes / 1024).toFixed(1) + ' KB';
+  }
+
+  function haceNatural(horas: number | null): string {
+    if (horas === null) return '';
+    if (horas < 1) return 'hace menos de 1 hora';
+    if (horas < 24) {
+      const n = Math.floor(horas);
+      return `hace ${n} hora${n === 1 ? '' : 's'}`;
+    }
+    const n = Math.floor(horas / 24);
+    return `hace ${n} día${n === 1 ? '' : 's'}`;
+  }
+
+  function tipoCopia(t: CopiaItem['tipo']): string {
+    if (t === 'diaria') return 'Diaria';
+    if (t === 'manual') return 'Manual';
+    return 'Antes de restaurar';
+  }
+
+  const drawAuto = (): void => {
+    clear(autoSection);
+    autoSection.append(h('h3', { text: 'Copia automática' }));
+    autoSection.append(h('p', { class: 'ayuda', text: 'WebHub hace una copia de la base de datos cada día y la guarda en el servidor (se conservan las últimas 14). Otra copia aparte, la del servidor, puede recoger el archivo webhub-ultima.sqlite.' }));
+    if (copiasLoading) {
+      autoSection.append(h('p', { class: 'ayuda', text: 'Cargando…' }));
+      return;
+    }
+    if (copiasError) {
+      autoSection.append(h('p', { class: 'error', text: copiasError }));
+      return;
+    }
+    if (!copiasEstado) {
+      autoSection.append(h('p', { class: 'ayuda', text: 'Cargando…' }));
+      return;
+    }
+    if (!copiasEstado.activa) {
+      autoSection.append(h('p', { text: 'Las copias automáticas están desactivadas en este servidor.' }));
+      return;
+    }
+    const s = copiasEstado;
+    const summary = h('div', { class: 'resumen' });
+    const ultimaTexto = s.ultimaOk ? new Date(s.ultimaOk).toLocaleString('es-ES') : '—';
+    const entreParentesis = s.ultimaOk && s.horasDesdeUltima !== null ? ` (${haceNatural(s.horasDesdeUltima)})` : '';
+    summary.append(h('span', null, 'Última copia correcta: ', ultimaTexto, entreParentesis));
+    summary.append(h('span', null, `${s.total} copias guardadas`));
+    summary.append(h('span', null, 'Carpeta: ', s.carpeta));
+    autoSection.append(summary);
+    if (s.aviso) {
+      const msg = s.ultimaOk === null
+        ? 'Todavía no se ha hecho ninguna copia.'
+        : 'No hay una copia reciente (más de 36 horas). Haz una ahora y revisa los registros del servidor.';
+      autoSection.append(h('p', { class: 'error', text: msg, attrs: { role: 'alert' } }));
+    }
+    if (s.ultimoError) {
+      autoSection.append(h('p', { class: 'error', text: `El último intento falló: ${s.ultimoError}` }));
+    }
+    if (s.archivoEstable) {
+      autoSection.append(h('p', { text: `Archivo estable para la copia del servidor: webhub-ultima.sqlite (${tamanoLegible(s.archivoEstable.bytes)})` }));
+    }
+    const btn = h('button', { class: 'btn primario', text: 'Hacer copia ahora', attrs: { type: 'button' } });
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try {
+        await api('POST', '/api/copias');
+        toast('Copia hecha.');
+        await cargarCopias();
+      } catch (err) {
+        toast((err as Error).message, true);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+    autoSection.append(h('p', null, btn));
+    const copias = s.copias ?? [];
+    if (copias.length > 0) {
+      const thead = h('thead', null, h('tr', null, h('th', { text: 'Fecha' }), h('th', { text: 'Tipo' }), h('th', { text: 'Tamaño' }), h('th', { text: 'Archivo' })));
+      const tbody = h('tbody');
+      for (const c of copias) {
+        tbody.append(h('tr', null,
+          h('td', { text: new Date(c.fecha).toLocaleString('es-ES') }),
+          h('td', { text: tipoCopia(c.tipo) }),
+          h('td', { text: tamanoLegible(c.bytes) }),
+          h('td', null, c.archivo),
+        ));
+      }
+      autoSection.append(h('table', { class: 'tabla' }, thead, tbody));
+    }
+  };
+
+  const cargarCopias = async (): Promise<void> => {
+    copiasLoading = true;
+    copiasError = null;
+    copiasEstado = null;
+    drawAuto();
+    try {
+      const r = await api<EstadoCopias>('GET', '/api/copias');
+      copiasEstado = r;
+    } catch (err) {
+      copiasError = (err as Error).message;
+      toast(copiasError, true);
+    } finally {
+      copiasLoading = false;
+      drawAuto();
+    }
+  };
+
+  void cargarCopias();
+
   clear(
     container,
+    autoSection,
     h(
       'div',
       { class: 'seccion' },
