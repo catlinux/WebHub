@@ -7,6 +7,15 @@ import type { Family, Link, Snapshot } from '../shared/types.ts';
 
 /** Error de validación: se devuelve al cliente como 400 con este mensaje. */
 export class InputError extends Error {}
+/** Error por URL duplicada: se devuelve como 409 con los datos del enlace existente. */
+export class DuplicadoError extends InputError {
+  existente: { id: number; title: string; familyId: number; familia: string };
+  constructor(existente: { id: number; title: string; familyId: number; familia: string }, message: string) {
+    super(message);
+    this.name = 'DuplicadoError';
+    this.existente = existente;
+  }
+}
 
 interface FamilyRow { id: number; parent_id: number | null; name: string; position: number; collapsed: number; col: number | null }
 interface LinkRow {
@@ -86,6 +95,26 @@ export class Repo {
     const row = this.db.prepare('SELECT * FROM links WHERE id = ?').get(id) as LinkRow | undefined;
     if (!row) throw new InputError('El enlace no existe.');
     return row;
+  }
+
+  /** Etiqueta completa de familia en el servidor («Padre › Hijo»). */
+  private familyLabel(id: number): string {
+    const row = this.family(id);
+    if (row.parent_id === null) return row.name;
+    const parent = this.family(row.parent_id);
+    return `${parent.name} › ${row.name}`;
+  }
+
+  /** Primer enlace (menor id) cuya URL tenga la misma duplicateKey. */
+  private primerDuplicado(key: string): LinkRow | undefined {
+    const rows = this.db.prepare('SELECT * FROM links ORDER BY id').all() as unknown as LinkRow[];
+    return rows.find((r) => duplicateKey(r.url) === key);
+  }
+
+  /** Primer enlace (menor id) distinto de `id` con la misma duplicateKey. */
+  private otroDuplicado(key: string, id: number): LinkRow | undefined {
+    const rows = this.db.prepare('SELECT * FROM links ORDER BY id').all() as unknown as LinkRow[];
+    return rows.find((r) => r.id !== id && duplicateKey(r.url) === key);
   }
 
   /** Solo hay dos niveles: el padre ha de ser una familia de primer nivel. */
@@ -180,6 +209,17 @@ export class Repo {
     this.family(familyId);
     const u = url(input.url);
     const title = text(input.title, 'título', 300) || domainOf(u);
+    const permitirDuplicado = input.permitirDuplicado === true;
+    if (!permitirDuplicado) {
+      const existente = this.primerDuplicado(duplicateKey(u));
+      if (existente) {
+        const familia = this.familyLabel(existente.family_id);
+        throw new DuplicadoError(
+          { id: existente.id, title: existente.title, familyId: existente.family_id, familia },
+          `Ya tienes este enlace en «${familia}»: «${existente.title}».`,
+        );
+      }
+    }
     const r = this.db
       .prepare('INSERT INTO links (family_id, title, url, note, tags, favorite, position) VALUES (?, ?, ?, ?, ?, ?, ?)')
       .run(
@@ -214,6 +254,16 @@ export class Repo {
       checkIgnored = input.checkIgnored ? 1 : 0;
     }
     const urlChanged = u !== cur.url;
+    if (urlChanged && input.permitirDuplicado !== true) {
+      const existente = this.otroDuplicado(duplicateKey(u), id);
+      if (existente) {
+        const familia = this.familyLabel(existente.family_id);
+        throw new DuplicadoError(
+          { id: existente.id, title: existente.title, familyId: existente.family_id, familia },
+          `Ya tienes este enlace en «${familia}»: «${existente.title}».`,
+        );
+      }
+    }
     this.db
       .prepare(
         `UPDATE links SET family_id = ?, position = ?, title = ?, url = ?, note = ?, tags = ?, favorite = ?, check_ignored = ?, updated_at = ?,
@@ -296,7 +346,7 @@ export class Repo {
         }
         ids.set(g.key, familyId);
         for (const l of links) {
-          this.createLink({ familyId, title: l.title, url: l.url, note: l.note });
+          this.createLink({ familyId, title: l.title, url: l.url, note: l.note, permitirDuplicado: true });
           known.add(duplicateKey(l.url));
           createdLinks++;
         }
@@ -345,7 +395,7 @@ export class Repo {
       for (const l of sortedLinks) {
         const familyId = map.get(l.familyId);
         if (familyId === undefined) throw new InputError(`El enlace «${String(l.title)}» apunta a una familia inexistente.`);
-        const created = this.createLink({ ...l, familyId });
+        const created = this.createLink({ ...l, familyId, permitirDuplicado: true });
         const clicks = Number(l.clicks);
         if (Number.isInteger(clicks) && clicks > 0) {
           this.db.prepare('UPDATE links SET clicks = ?, last_click_at = ? WHERE id = ?').run(

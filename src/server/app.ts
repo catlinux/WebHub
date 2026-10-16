@@ -4,7 +4,7 @@ import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { DatabaseSync } from 'node:sqlite';
 import { Router, HttpError, sendJson, readJson, parseCookies, clientIp, idParam, type Ctx } from './http.ts';
-import { Repo, InputError } from './repo.ts';
+import { Repo, InputError, DuplicadoError } from './repo.ts';
 import { LoginLimiter, PIN_MAX, createSession, deleteSession, getPinHash, isPinLoginEnabled, isValidSession, setPinLoginEnabled, verifySecret } from './auth.ts';
 import { LinkChecker } from './checker.ts';
 import { ChallengeStore, verifyRegistration, verifyAssertion, WebAuthnError } from './webauthn.ts';
@@ -478,6 +478,8 @@ export function createApp(opts: AppOptions): { server: Server; repo: Repo } {
       }
       if (err instanceof HttpError) {
         sendJson(res, err.status, { error: err.message }, err.headers);
+      } else if (err instanceof DuplicadoError) {
+        sendJson(res, 409, { error: err.message, existente: err.existente });
       } else if (err instanceof InputError) {
         sendJson(res, 400, { error: err.message });
       } else {

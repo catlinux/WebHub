@@ -1,7 +1,18 @@
 import { h } from './dom.ts';
-import { api } from './api.ts';
+import { api, ApiError } from './api.ts';
 import { state, topFamilies, childrenOf, familyLabel } from './state.ts';
 import type { Family, Link } from '../shared/types.ts';
+
+/** Error controlado que permite reintentar el envío sin cerrar el diálogo. */
+export class ReintentoDialogo extends Error {
+  mensaje: string;
+  etiquetaBoton: string;
+  constructor(mensaje: string, etiquetaBoton: string) {
+    super(mensaje);
+    this.mensaje = mensaje;
+    this.etiquetaBoton = etiquetaBoton;
+  }
+}
 
 /** Diálogo modal genérico: ejecuta `submit` y muestra el error sin cerrarse si falla. */
 export function openDialog(opts: {
@@ -30,7 +41,12 @@ export function openDialog(opts: {
       await opts.submit();
       dialog.close();
     } catch (err) {
-      error.textContent = (err as Error).message;
+      if (err instanceof ReintentoDialogo) {
+        error.textContent = err.mensaje;
+        submitBtn.textContent = err.etiquetaBoton;
+      } else {
+        error.textContent = (err as Error).message;
+      }
     } finally {
       submitBtn.disabled = false;
     }
@@ -184,6 +200,15 @@ export function linkDialog(link: Link | null, defaultFamily: number | null, onDo
     });
   }
 
+  let forzar = false;
+  url.addEventListener('input', () => {
+    if (forzar) {
+      forzar = false;
+      const dialog = document.querySelector('dialog');
+      const btn = dialog?.querySelector('button.btn.primario, button.btn.peligro') as HTMLButtonElement | null;
+      if (btn) btn.textContent = link ? 'Guardar' : 'Añadir';
+    }
+  });
   openDialog({
     title: link ? 'Editar enlace' : 'Nuevo enlace',
     body: [
@@ -200,10 +225,21 @@ export function linkDialog(link: Link | null, defaultFamily: number | null, onDo
     ],
     submitLabel: link ? 'Guardar' : 'Añadir',
     submit: async () => {
-      const body = { url: url.value, title: title.value, familyId: Number(family.value), tags: tags.value, note: note.value, favorite: fav.checked };
-      if (link) await api('PATCH', `/api/links/${link.id}`, body);
-      else await api('POST', '/api/links', body);
-      await onDone();
+      const body: Record<string, unknown> = { url: url.value, title: title.value, familyId: Number(family.value), tags: tags.value, note: note.value, favorite: fav.checked };
+      if (forzar) body.permitirDuplicado = true;
+      try {
+        if (link) await api('PATCH', `/api/links/${link.id}`, body);
+        else await api('POST', '/api/links', body);
+        await onDone();
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 409 && (err.data as { existente?: unknown } | null)?.existente) {
+          forzar = true;
+          const etiqueta = link ? 'Guardar igualmente' : 'Añadir igualmente';
+          const mensajeServidor = (err.data as { error?: string } | null)?.error ?? err.message;
+          throw new ReintentoDialogo(`${mensajeServidor} Pulsa «${etiqueta}» para guardarlo de todos modos.`, etiqueta);
+        }
+        throw err;
+      }
     },
   });
 }
