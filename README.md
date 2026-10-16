@@ -70,6 +70,14 @@ Las capturas usan datos de ejemplo inventados (dominios `.example`); ninguna con
   resumen del último acceso correcto y de los intentos fallidos de las últimas
   24 horas; al entrar aparece un aviso superior si hubo intentos fallidos
   desde la entrada anterior.
+- **Copia automática de la base de datos**: WebHub hace por sí mismo una copia
+  coherente cada día (verificada y publicada de forma atómica), con retención
+  y panel en Administrar › Copia de seguridad (última copia, aviso si pasan
+  más de 36 horas, botón «Hacer copia ahora», lista). Ver
+  [docs/copias.md](docs/copias.md).
+- **Aviso de enlace duplicado**: al añadir o editar un enlace cuya URL ya
+  existe, el diálogo avisa y el botón pasa a «Añadir igualmente» (o
+  «Guardar igualmente»).
 
 WebHub **no guarda contraseñas ni secretos** de ningún tipo (ver [TODO.md](TODO.md)).
 
@@ -110,7 +118,10 @@ con un mensaje claro si falta.
 | `WEBHUB_PUBLIC_ORIGIN` | (vacío) | p. ej. `https://webhub.ejemplo.com`. Si se define, las peticiones de escritura deben venir de ese origen. Además fija el origen y el dominio (rpId) de las huellas; en producción debe definirse. |
 | `WEBHUB_SESSION_DAYS` | `30` | Duración de la sesión. |
 | `WEBHUB_INSECURE_COOKIE` | (vacío) | `1` quita el atributo `Secure` de la cookie (solo desarrollo). |
-
+| `WEBHUB_BACKUP` | (activado) | `0` desactiva la copia automática de la base de datos. |
+| `WEBHUB_BACKUP_DIR` | `./data/copias` | Carpeta de las copias. |
+| `WEBHUB_BACKUP_KEEP` | `14` | Copias diarias a conservar (si no es un entero ≥ 1, 14). |
+| `WEBHUB_BACKUP_FIRST_DELAY_MS` | `60000` | Espera antes de la primera revisión (solo diagnóstico y pruebas). |
 ## Seguridad
 
 - Acceso con un **PIN de 6 a 12 dígitos**, guardado como hash **scrypt** con sal; se crea o cambia por terminal
@@ -151,6 +162,12 @@ con un mensaje claro si falta.
   en todas las respuestas y un archivo `robots.txt` que prohíbe el rastreo, de
   modo que la aplicación no aparece en los buscadores (antes solo había una
   etiqueta meta en la página de entrada).
+- **Copias de la base de datos**: verificadas (`integrity_check`, `user_version`
+  y número de filas), escritas primero a un temporal y publicadas con
+  renombrado atómico; carpeta con permisos 0700 y archivos 0600 (la base contiene
+  el hash del PIN y las claves públicas de las huellas). Antes de restaurar un
+  JSON se hace una copia previa; si falla, la restauración se cancela. Ver
+  [docs/copias.md](docs/copias.md).
 
 ## Desarrollo
 

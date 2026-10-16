@@ -4,6 +4,63 @@ Todos los cambios relevantes de WebHub se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/)
 y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [0.7.0] - 2026-10-16
+
+### Añadido
+
+- Copia automática de la base de datos: WebHub hace por sí mismo una copia
+  coherente cada día (comprueba cada 30 minutos y la hace si no hay ninguna
+  diaria de las últimas 24 horas; la primera revisión es 60 segundos después de
+  arrancar) con `VACUUM INTO` de SQLite, la verifica (`integrity_check`,
+  `user_version` y número de filas de las tablas) y solo entonces la publica,
+  escribiéndola primero a un temporal y renombrándola de forma atómica. Carpeta
+  por defecto `data/copias` (en el servidor
+  `/opt/contabo-apps/webhub/data/copias/`), con permisos 0700 en la carpeta y
+  0600 en los archivos.
+- Archivos de copia: `webhub-AAAA-MM-DD.sqlite` (diaria, fecha UTC; una al día,
+  se sustituye si se repite), `webhub-manual-AAAA-MM-DD_HHMMSS.sqlite` (botón
+  «Hacer copia ahora»), `webhub-antes-de-restaurar-AAAA-MM-DD_HHMMSS.sqlite`
+  (antes de restaurar un JSON; si falla, la restauración se cancela) y el
+  archivo estable `webhub-ultima.sqlite`, que siempre contiene la última copia
+  buena (diaria o manual), se reescribe de forma atómica y es seguro leer en
+  cualquier momento: es el que debe recoger la copia diaria del servidor.
+  Retención: 14 diarias (configurable), 10 manuales, 5 previas a restaurar; no
+  se borra nada que no tenga exactamente esos nombres. Desactivación con
+  `WEBHUB_BACKUP=0`; variables `WEBHUB_BACKUP_DIR`, `WEBHUB_BACKUP_KEEP` (por
+  defecto 14; si no es un entero ≥ 1, 14) y `WEBHUB_BACKUP_FIRST_DELAY_MS`
+  (por defecto 60000, solo diagnóstico y pruebas). Si una copia falla, se anota
+  el error (visible en Administrar) y se reintenta en la siguiente revisión; la
+  aplicación sigue funcionando.
+- Administrar › Copia de seguridad: última copia correcta (con «hace X»),
+  cuántas hay, carpeta, archivo estable y su tamaño, aviso si pasan más de 36
+  horas sin copia correcta, último error si lo hubo, botón «Hacer copia ahora»
+  (como mucho una cada 30 segundos) y lista de las últimas copias. Rutas
+  `GET /api/copias` y `POST /api/copias` (con sesión).
+- Aviso de enlace duplicado al añadir o editar: el diálogo avisa
+  («Ya tienes este enlace en «Familia»: «Título».») y el botón pasa a «Añadir
+  igualmente» (o «Guardar igualmente»).
+- Copia previa al restaurar un JSON: se hace antes la copia de la base de datos
+  y la respuesta de restaurar incluye su nombre (`copiaPrevia`).
+- Comprobación de salud del contenedor: healthcheck de Docker que consulta
+  `/api/session` cada 30 segundos.
+
+### Cambiado
+
+- `POST` y `PATCH` de enlaces devuelven 409 con `{ error, existente }` si la URL
+  ya existe, salvo que el cuerpo lleve `permitirDuplicado: true` (booleano
+  estricto).
+- Contraste y tamaños táctiles: el texto tenue (dominios, contadores,
+  subtítulos) sube a WCAG AA (≥ 4,5:1) en los temas oscuro y claro (en el oscuro
+  era 3,0:1; en el claro el verde de acento pasa a un tono más oscuro) y en
+  pantallas táctiles los elementos interactivos miden al menos 44 px.
+- La respuesta de restaurar incluye `copiaPrevia`.
+
+### Seguridad
+
+- Archivos de copia con permisos 0600 y carpeta con 0700 (la base contiene el
+  hash del PIN y las claves públicas de las huellas; tratarlos como secretos).
+- La restauración de un JSON no se hace si falla la copia previa.
+
 ## [0.6.0] - 2026-10-15
 
 ### Añadido

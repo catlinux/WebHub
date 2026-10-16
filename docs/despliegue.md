@@ -180,12 +180,20 @@ Comprobación: `curl -sI https://tu-dominio/ | grep -i x-robots` y
 
 - **Desde la web**: Administrar › Copia de seguridad › Descargar copia (JSON). Incluye familias, enlaces,
   notas, etiquetas, favoritos y contadores; no incluye el PIN ni las sesiones.
+- **Automática**: WebHub hace por sí mismo una copia coherente cada día de la
+  base de datos (verificada y publicada de forma atómica) en
+  `data/copias/`, con el archivo estable `webhub-ultima.sqlite` como el que
+  debe recoger la copia diaria del servidor. Más detalles, rutas, permisos y
+  restauración: [copias.md](copias.md).
 - **En el servidor**: la base de datos está en `/opt/contabo-apps/webhub/data/webhub.sqlite` (modo WAL). No la
   copies con `cp` en caliente; usa la copia en línea de SQLite, por ejemplo desde el propio contenedor:
 
 ```sh
 docker compose exec webhub node --disable-warning=ExperimentalWarning -e "new (require('node:sqlite').DatabaseSync)('/app/data/webhub.sqlite').exec(\"VACUUM INTO '/app/data/copia.sqlite'\")"
 ```
+
+Antes de actualizar WebHub sigue siendo buena idea hacer una copia manual de la
+base de datos (ver [copias.md](copias.md)).
 
 ## 7. Actualizar
 
@@ -200,6 +208,9 @@ git pull
 docker compose run --rm build
 docker compose restart webhub
 ```
+
+Tras actualizar, `docker compose ps` debe mostrar el servicio como `healthy`
+(gracias al healthcheck, que consulta `/api/session` cada 30 segundos).
 
 Las migraciones de la base de datos se aplican solas al arrancar. Las migraciones 4, 5 y 6 (registro de accesos, marca de enlaces ignorados en el comprobador y columna de familias) se aplican solas al reiniciar; antes de actualizar se recomienda hacer una copia de la base de datos. La migración 3 y el cambio de dónde se guarda el aspecto se aplican solos al reiniciar. Para usar un Node más nuevo:
 `docker compose pull && docker compose up -d`.
@@ -291,6 +302,18 @@ un móvil físico, Safari ni Firefox, ni en producción (pendiente de que lo con
 **Analizador de páginas, protección contra redes internas y dominio en `.env` (0.6.0), comprobado:** 392 tests automáticos pasan (los de seguridad se verificaron rompiendo el código a propósito: cada comprobación rota hace fallar algún test); el comprobador real contra Internet (sitios públicos por HTTPS, redirección de http a https, dominio inexistente, certificado caducado) sigue dando los mismos resultados y bloquea 127.0.0.1, localhost, 169.254.169.254, 172.18.0.1, ::1, 2130706433 y 192.168.x; prueba de extremo a extremo en Chromium real del diálogo del analizador con páginas de ejemplo locales (análisis automático y manual, título sin pisar, etiquetas que se añaden y quitan, descripción como nota, errores claros, guardar tras un fallo).
 
 **Analizador de páginas, protección contra redes internas y dominio en `.env` (0.6.0), no comprobado:** la calidad de las etiquetas con webs reales variadas, el analizador en un móvil físico ni en producción, ni Safari o Firefox (pendiente de que lo confirme el usuario).
+
+**Copia automática, aviso de duplicados, legibilidad y comprobación de salud (0.7.0), comprobado:** 457 tests
+automáticos pasan (los de seguridad y de copias se verificaron rompiendo el código a propósito: cada
+comprobación rota hace fallar algún test); la auditoría automática de accesibilidad (axe-core) sobre todas
+las pantallas en los tres temas ya no da ningún fallo de contraste; pruebas de extremo a extremo en
+Chromium real con el servidor de verdad: la copia automática aparece sola tras arrancar, copia manual,
+límite de 30 segundos, aviso de copia antigua, error mostrado como texto, restauración con copia previa
+(la copia previa contiene los datos anteriores y la base los nuevos) y permisos 0700/0600 en disco.
+
+**Copia automática, aviso de duplicados, legibilidad y comprobación de salud (0.7.0), no comprobado:** que la
+copia diaria del servidor recoja `webhub-ultima.sqlite` (la configura otro proyecto), una restauración
+completa desde una copia automática en producción, y los tamaños táctiles en un móvil físico.
 
 **No probado:**
 

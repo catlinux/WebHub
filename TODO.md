@@ -2,13 +2,16 @@
 
 ## Pendiente
 
-- [ ] Copia automática de `data/` en el VPS (temporizador con `VACUUM INTO`) y confirmar si la copia Borg
-      del servidor incluye `/opt/contabo-apps/webhub/data`.
+- [ ] Confirmar que la copia diaria del servidor recoge data/copias/webhub-ultima.sqlite (lo configura
+      otro proyecto) y probar una restauración completa; ver docs/copias.md.
 - [ ] Comprobar la entrada con huella en un móvil real y en el dominio de producción, y anotar el
       resultado en docs/despliegue.md.
 - [ ] Comprobar el aspecto configurable y las familias plegadas en un móvil real y en producción.
 - [ ] Comprobar el registro de accesos, el modo solo huella, el comprobador y las columnas en un móvil real y en producción.
 - [ ] Probar el analizador de páginas con webs reales y ajustar las reglas de etiquetas si hace falta.
+- [ ] Comprobar la copia automática, el aviso de duplicados y los tamaños táctiles en un móvil real y en producción.
+- [ ] Guardar las pruebas de navegador (extremo a extremo) en el repositorio y añadir una verificación automática en GitHub.
+- [ ] Lista y cierre de sesiones desde la interfaz (hoy solo se cierran todas cambiando el PIN).
 
 ## Pendiente de decidir
 
@@ -34,3 +37,7 @@
 - [ ] Buscar en la web cuando no hay resultados y filtrar por etiqueta con un clic
 - [ ] Exportar los enlaces como marcadores HTML para otro navegador
 - [ ] Analizar también las páginas al importar marcadores (hoy solo al añadir un enlace)
+- [ ] Mostrar las etiquetas en la lista y filtrar por etiqueta con un clic
+- [ ] Papelera para deshacer borrados
+- [ ] Estructura de la página para lectores de pantalla (<main> en la entrada y <h1> en cada vista)
+- [ ] ETag en los archivos estáticos
