@@ -14,6 +14,7 @@ import { getAspecto, setAspecto } from './aspecto.ts';
 import { logAccess, listAccess, accessSummary, omittedCount } from './accesos.ts';
 import { LimitadorAnalisis, ErrorAnalisis, analizarUrl } from './analisis.ts';
 import { parseBookmarksHtml, planImport } from '../shared/bookmarks.ts';
+import { hacerCopia, purgarCopias, listarCopias, estadoCopias } from './copias.ts';
 
 export interface AppOptions {
   db: DatabaseSync;
@@ -26,6 +27,10 @@ export interface AppOptions {
   checker?: LinkChecker;
   analisisLimiter?: LimitadorAnalisis;
   analisisTimeoutMs?: number;
+  copiasDir?: string | null;
+  copiasReloj?: () => number;
+  /** Copias diarias a conservar al purgar tras una copia manual (por defecto 14). */
+  copiasConservar?: number;
 }
 
 const COOKIE = 'webhub_sesion';
@@ -63,6 +68,9 @@ export function createApp(opts: AppOptions): { server: Server; repo: Repo } {
   const checker = opts.checker ?? new LinkChecker(repo);
   const analisisLimiter = opts.analisisLimiter ?? new LimitadorAnalisis();
   const publicDir = opts.publicDir ?? DEFAULT_PUBLIC;
+  const copiasDir = opts.copiasDir === undefined ? null : opts.copiasDir;
+  const copiasReloj = opts.copiasReloj ?? (() => Date.now());
+  let ultimaManualMs: number | null = null;
   const sessionDays = opts.sessionDays ?? 30;
   const regChallenges = new ChallengeStore();
   const loginChallenges = new ChallengeStore();
@@ -226,7 +234,52 @@ export function createApp(opts: AppOptions): { server: Server; repo: Repo } {
   api.on('POST', '/api/import/json', async (ctx) => {
     const body = await readJson(ctx.req, BIG_BODY);
     if (body.confirm !== 'SUSTITUIR') throw new InputError('Falta la confirmación.');
+    if (copiasDir !== null) {
+      let copia: { archivo: string };
+      try {
+        copia = hacerCopia(db, copiasDir, 'antes-de-restaurar', copiasReloj());
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(msg);
+        sendJson(ctx.res, 500, { error: 'No se pudo hacer la copia previa; la restauración se ha cancelado.' });
+        return;
+      }
+      const resultado = repo.importJson(body.data);
+      sendJson(ctx.res, 200, { ...resultado, copiaPrevia: copia.archivo });
+      return;
+    }
     sendJson(ctx.res, 200, repo.importJson(body.data));
+  });
+
+  api.on('GET', '/api/copias', ({ res }) => {
+    if (copiasDir === null) {
+      sendJson(res, 200, { activa: false });
+      return;
+    }
+    const estado = estadoCopias(db, copiasDir, copiasReloj());
+    sendJson(res, 200, { activa: true, ...estado, copias: listarCopias(copiasDir).slice(0, 20) });
+  });
+
+  api.on('POST', '/api/copias', async (ctx) => {
+    if (copiasDir === null) {
+      sendJson(ctx.res, 404, { error: 'Las copias automáticas están desactivadas.' });
+      return;
+    }
+    const ahora = copiasReloj();
+    if (ultimaManualMs !== null && ahora - ultimaManualMs < 30000) {
+      sendJson(ctx.res, 429, { error: 'Espera unos segundos antes de hacer otra copia.' }, { 'Retry-After': '30' });
+      return;
+    }
+    try {
+      const info = hacerCopia(db, copiasDir, 'manual', ahora);
+      purgarCopias(copiasDir, opts.copiasConservar);
+      ultimaManualMs = ahora;
+      sendJson(ctx.res, 201, info);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(msg);
+      sendJson(ctx.res, 500, { error: 'No se pudo hacer la copia.' });
+    }
   });
 
   api.on('POST', '/api/check', ({ res }) => sendJson(res, 202, checker.start()));
